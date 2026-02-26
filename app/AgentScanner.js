@@ -1,5 +1,9 @@
 "use client";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
+import { useAuth } from "@/lib/AuthContext";
+import AuthModal from "./auth/AuthModal";
+import UserMenu from "./auth/UserMenu";
+import AlertModal from "./auth/AlertModal";
 
 // ============================================================
 // DATA
@@ -368,7 +372,7 @@ function BarChart({ data, w = 300, h = 72 }) {
 // ============================================================
 // DETAIL PANEL
 // ============================================================
-function DetailPanel({ p, onClose }) {
+function DetailPanel({ p, onClose, onAlert }) {
   if (!p) return null;
 
   const grid = [
@@ -413,7 +417,7 @@ function DetailPanel({ p, onClose }) {
 
         <div style={{ padding: "20px 26px 26px" }}>
 
-          {/* Links + Contact Row */}
+          {/* Links + Contact + Alert Row */}
           <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
             {p.website && <ExtLink href={p.website} style={{ padding: "6px 14px", borderRadius: 6, background: "var(--s2)", border: "1px solid var(--b1)", fontSize: 11, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 5 }}>
               <span style={{ fontSize: 12 }}>↗</span> Website
@@ -421,8 +425,14 @@ function DetailPanel({ p, onClose }) {
             {p.twitter && <ExtLink href={p.twitter} style={{ padding: "6px 14px", borderRadius: 6, background: "var(--s2)", border: "1px solid var(--b1)", fontSize: 11, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 5, color: "var(--t2)" }}>
               𝕏 Profile
             </ExtLink>}
+            <button onClick={(e) => { e.stopPropagation(); if (onAlert) onAlert(e, p); }} style={{ padding: "6px 14px", borderRadius: 6, background: "var(--s2)", border: "1px solid var(--b1)", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "var(--f)", color: "var(--t2)", display: "inline-flex", alignItems: "center", gap: 5, transition: "all .12s" }}
+              onMouseEnter={e => { e.currentTarget.style.background = "rgba(37,99,235,.05)"; e.currentTarget.style.color = "var(--g)"; }}
+              onMouseLeave={e => { e.currentTarget.style.background = "var(--s2)"; e.currentTarget.style.color = "var(--t2)"; }}
+            >
+              🔔 Set Alert
+            </button>
             {p.contactEmail && (
-              <a href={`mailto:${p.contactEmail}`} style={{ marginLeft: "auto", padding: "7px 18px", borderRadius: 7, background: "var(--g)", color: "var(--bg)", fontSize: 11, fontWeight: 700, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6, letterSpacing: ".01em" }}>
+              <a href={`mailto:${p.contactEmail}`} style={{ marginLeft: "auto", padding: "7px 18px", borderRadius: 7, background: "var(--g)", color: "#FFFFFF", fontSize: 11, fontWeight: 700, textDecoration: "none", display: "inline-flex", alignItems: "center", gap: 6, letterSpacing: ".01em" }}>
                 ✉ Contact {p.contactName || "Team"}
               </a>
             )}
@@ -627,6 +637,9 @@ function ApplyModal({ onClose }) {
 // MAIN
 // ============================================================
 export default function AgentScreener() {
+  const auth = useAuth();
+  const user = auth?.user;
+  const supabase = auth?.supabase;
   const [cat, setCat] = useState("All");
   const [sort, setSort] = useState("mrrChange");
   const [q, setQ] = useState("");
@@ -635,8 +648,41 @@ export default function AgentScreener() {
   const [wl, setWl] = useState(new Set());
   const [wlFilter, setWlFilter] = useState(false);
   const [view, setView] = useState("table");
+  const [authModal, setAuthModal] = useState(null); // "signin" | "signup" | null
+  const [alertProduct, setAlertProduct] = useState(null);
 
-  const toggleWl = useCallback((e, id) => { e.stopPropagation(); setWl(p => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; }); }, []);
+  // Load watchlist from Supabase when user logs in
+  useEffect(() => {
+    if (!user || !supabase) return;
+    supabase.from("watchlist").select("product_id").eq("user_id", user.id).then(({ data }) => {
+      if (data) setWl(new Set(data.map(d => d.product_id)));
+    });
+  }, [user, supabase]);
+
+  const toggleWl = useCallback(async (e, id) => {
+    e.stopPropagation();
+    if (!user) { setAuthModal("signin"); return; }
+    setWl(prev => {
+      const next = new Set(prev);
+      const adding = !next.has(id);
+      adding ? next.add(id) : next.delete(id);
+      // Persist to Supabase
+      if (supabase) {
+        if (adding) {
+          supabase.from("watchlist").insert({ user_id: user.id, product_id: id });
+        } else {
+          supabase.from("watchlist").delete().eq("user_id", user.id).eq("product_id", id);
+        }
+      }
+      return next;
+    });
+  }, [user, supabase]);
+
+  const openAlert = useCallback((e, product) => {
+    e.stopPropagation();
+    if (!user) { setAuthModal("signin"); return; }
+    setAlertProduct(product);
+  }, [user]);
 
   const filtered = useMemo(() => {
     return PRODUCTS
@@ -709,6 +755,18 @@ export default function AgentScreener() {
           </div>
           <div style={{ width: 1, height: 18, background: "var(--b2)" }} />
           <button onClick={() => setApply(true)} style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid rgba(37,99,235,.25)", background: "var(--gd)", color: "var(--g)", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "var(--f)" }}>+ Submit Product</button>
+          <div style={{ width: 1, height: 18, background: "var(--b2)" }} />
+          {user ? (
+            <UserMenu />
+          ) : (
+            <div style={{ display: "flex", gap: 6 }}>
+              <button onClick={() => setAuthModal("signin")} style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid var(--b1)", background: "transparent", color: "var(--t1)", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "var(--f)", transition: "all .12s" }}
+                onMouseEnter={e => e.currentTarget.style.background = "var(--s2)"}
+                onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+              >Sign In</button>
+              <button onClick={() => setAuthModal("signup")} className="btn-primary" style={{ padding: "6px 14px", fontSize: 11 }}>Sign Up</button>
+            </div>
+          )}
           <div style={{ width: 1, height: 18, background: "var(--b2)" }} />
           <div style={{ position: "relative" }}>
             <span style={{ position: "absolute", left: 9, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "var(--t3)", pointerEvents: "none" }}>⌕</span>
@@ -877,8 +935,10 @@ export default function AgentScreener() {
         </div>
       </div>
 
-      {sel && <DetailPanel p={sel} onClose={() => setSel(null)} />}
+      {sel && <DetailPanel p={sel} onClose={() => setSel(null)} onAlert={openAlert} />}
       {apply && <ApplyModal onClose={() => setApply(false)} />}
+      {authModal && <AuthModal onClose={() => setAuthModal(null)} initialMode={authModal} />}
+      {alertProduct && <AlertModal product={alertProduct} onClose={() => setAlertProduct(null)} />}
     </div>
   );
 }

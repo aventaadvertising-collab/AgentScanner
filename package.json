@@ -1,5 +1,5 @@
 {
-  "name": "agentscanner",
+  "name": "agentscreener",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -10,6 +10,8 @@
   "dependencies": {
     "next": "14.2.18",
     "react": "18.3.1",
-    "react-dom": "18.3.1"
+    "react-dom": "18.3.1",
+    "@supabase/supabase-js": "^2.45.0",
+    "@supabase/ssr": "^0.5.0"
   }
 }

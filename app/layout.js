@@ -1,3 +1,5 @@
+import { AuthProvider } from "@/lib/AuthContext";
+
 export const metadata = {
   title: "AgentScreener — AI Product Intelligence",
   description: "Real-time metrics, verified data, and intelligence on every AI product and agent.",
@@ -19,7 +21,9 @@ export default function RootLayout({ children }) {
         />
       </head>
       <body style={{ margin: 0, padding: 0, background: "#F4F5F7" }}>
-        {children}
+        <AuthProvider>
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );
