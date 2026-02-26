@@ -888,7 +888,6 @@ export default function AgentScanner() {
                 AGENT<span style={{ color: "var(--accent)" }}>SCANNER</span>
               </span>
             </div>
-            </div>
           </div>
         </div>
 
