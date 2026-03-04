@@ -10,6 +10,7 @@ import AlertModal from "./auth/AlertModal";
 // Pipeline data replaces placeholders once fetched
 // ============================================================
 import { REGISTRY, CATEGORIES } from "@/lib/pipeline/registry";
+import { getFundingData, getKnownMetrics } from "@/lib/pipeline/funding";
 
 // Category emoji map
 const CAT_EMOJI = {
@@ -48,47 +49,60 @@ function genTicker(name) {
   return words.map(w => w[0]).join("").slice(0, 5);
 }
 
-// Convert registry entries to display format
-const PRODUCTS = REGISTRY.map(p => ({
-  id: p.id,
-  name: p.name,
-  ticker: genTicker(p.name),
-  category: p.cat,
-  logo: CAT_EMOJI[p.cat] || "◆",
-  description: (p.tags || []).join(" · ") || p.cat,
-  // Metrics — null until pipeline populates, or from Supabase
-  mrr: null, mrrChange: null,
-  mrrHist: [],
-  mau: null, mauChange: null, dau: null,
-  githubStars: null, starVelocity: null,
-  teamSize: null, teamGrowth: null,
-  fundingTotal: null, lastRound: null, valuation: null,
-  investors: [],
-  uptime: null, latencyMs: null, errorRate: null,
-  sentiment: null, nps: null,
-  verifications: {
-    revenue: "self",
-    usage: "self",
-    community: p.g ? "github" : p.d ? "discord" : "self",
-    uptime: "self",
-    team: p.cb ? "crunchbase" : "self",
-  },
-  spark: genSpark(p.id),
-  hot: false,
-  age: p.yr ? `${2026 - parseInt(p.yr)}y` : null,
-  founded: p.yr || null,
-  website: p.w || null,
-  twitter: p.x ? `https://x.com/${p.x}` : null,
-  contactEmail: p.em || null,
-  contactName: p.cn || null,
-  github: p.g || null,
-  discord: p.d || null,
-  crunchbase: p.cb || null,
-  linkedin: p.li || null,
-  tags: p.tags || [],
-  token: p.tk || null,
-  hq: p.hq || null,
-}));
+// Convert registry entries to display format with seed data
+const PRODUCTS = REGISTRY.map(p => {
+  const fund = getFundingData(p.id);
+  const metrics = getKnownMetrics(p.id);
+  const seedMRR = metrics?.mrr ?? computeEstimatedMRR({
+    fundingTotal: fund?.total,
+    trafficVisits: null,
+    founded: p.yr,
+    category: p.cat,
+  });
+  const seedMAU = metrics?.mau ?? null;
+
+  return {
+    id: p.id,
+    name: p.name,
+    ticker: genTicker(p.name),
+    category: p.cat,
+    logo: CAT_EMOJI[p.cat] || "◆",
+    description: (p.tags || []).join(" · ") || p.cat,
+    mrr: seedMRR, mrrChange: null,
+    mrrHist: [],
+    mau: seedMAU, mauChange: null, dau: null,
+    githubStars: null, starVelocity: null,
+    teamSize: null, teamGrowth: null,
+    fundingTotal: fund?.total ?? null,
+    lastRound: fund?.last_round ?? null,
+    valuation: fund?.valuation ?? null,
+    investors: fund?.investors ?? [],
+    uptime: null, latencyMs: null, errorRate: null,
+    sentiment: null, nps: null,
+    verifications: {
+      revenue: metrics?.mrr ? "funding_estimate" : seedMRR ? "funding_estimate" : "self",
+      usage: metrics?.mau ? "traffic_estimate" : "self",
+      community: p.g ? "github" : p.d ? "discord" : "self",
+      uptime: "self",
+      team: fund ? "crunchbase" : p.cb ? "crunchbase" : "self",
+    },
+    spark: genSpark(p.id),
+    hot: false,
+    age: p.yr ? `${2026 - parseInt(p.yr)}y` : null,
+    founded: p.yr || null,
+    website: p.w || null,
+    twitter: p.x ? `https://x.com/${p.x}` : null,
+    contactEmail: p.em || null,
+    contactName: p.cn || null,
+    github: p.g || null,
+    discord: p.d || null,
+    crunchbase: p.cb || null,
+    linkedin: p.li || null,
+    tags: p.tags || [],
+    token: p.tk || null,
+    hq: p.hq || null,
+  };
+});
 
 const ALL_CATS = ["All", ...CATEGORIES];
 const SORTS = [
