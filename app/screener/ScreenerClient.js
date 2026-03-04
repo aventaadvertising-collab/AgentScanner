@@ -21,7 +21,7 @@ function fmtN(n) {
   return String(n);
 }
 
-export default function ScannerClient() {
+export default function ScreenerClient() {
   const [discoveries, setDiscoveries] = useState([]);
   const [stats, setStats] = useState({ today: 0, this_hour: 0 });
   const [catFilter, setCatFilter] = useState("All");
@@ -259,7 +259,7 @@ export default function ScannerClient() {
               letterSpacing: ".02em",
             }}
           >
-            SCANNER
+            SCREENER
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -283,7 +283,7 @@ export default function ScannerClient() {
                 boxShadow: "0 0 6px rgba(22,163,74,.4)",
               }}
             />
-            SCANNING
+            SCREENING
           </div>
           <div style={{ width: 1, height: 18, background: "var(--b2)" }} />
           <a
@@ -487,7 +487,7 @@ export default function ScannerClient() {
                 letterSpacing: "-.01em",
               }}
             >
-              Scanning the AI ecosystem
+              Screening the AI ecosystem
             </div>
             <div
               style={{
@@ -525,7 +525,7 @@ export default function ScannerClient() {
                   animation: "lp 2s ease-in-out infinite",
                 }}
               />
-              Intelligence engine active — awaiting first scan cycle
+              Intelligence engine active — awaiting first screening cycle
             </div>
           </div>
         ) : (
@@ -549,7 +549,7 @@ export default function ScannerClient() {
         <span
           style={{ fontSize: 11, color: "var(--t3)", fontFamily: "var(--m)" }}
         >
-          AGENTSCREENER SCANNER v0.1
+          AGENTSCREENER SCREENER v0.1
         </span>
         <span style={{ fontSize: 11, color: "var(--t3)" }}>
           Powered by AgentScreener Intelligence
