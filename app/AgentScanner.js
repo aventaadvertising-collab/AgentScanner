@@ -10,21 +10,12 @@ import AlertModal from "./auth/AlertModal";
 // Pipeline data replaces placeholders once fetched
 // ============================================================
 import { REGISTRY, CATEGORIES } from "@/lib/pipeline/registry";
-import { getFundingData, getKnownMetrics } from "@/lib/pipeline/funding";
+import { getFundingData, getKnownMetrics, getRevenueData } from "@/lib/pipeline/funding";
 
-// Category emoji map
-const CAT_EMOJI = {
-  "Code & Dev Tools": "⌨️", "AI Agents": "🤖", "Agent Frameworks": "🔧",
-  "Search & Research": "🔍", "Image Generation": "🎨", "Video Generation": "🎬",
-  "Audio & Voice": "🎙️", "Music Generation": "🎵", "Writing & Content": "✍️",
-  "Productivity & Workspace": "📋", "Foundation Models": "🧠", "Inference & Serving": "⚡",
-  "Model Hubs & Tooling": "🔗", "Open Source Models": "📦", "Crypto-AI": "💎",
-  "Voice Agents & Telephony": "📞", "Browser & Computer Use": "🖥️",
-  "Customer Support AI": "💬", "Sales & GTM AI": "📈", "Data & Analytics": "📊",
-  "Design & Creative": "🎯", "Legal AI": "⚖️", "Healthcare AI": "🏥",
-  "Finance AI": "💰", "Education AI": "🎓", "Robotics & Embodied AI": "🦾",
-  "3D & Spatial AI": "🌐", "AI Safety & Alignment": "🛡️",
-};
+// Extract domain from URL for logo fetching
+function getDomain(url) {
+  try { return new URL(url).hostname; } catch { return null; }
+}
 
 // Generate a deterministic pseudo-random sparkline from product id
 function genSpark(id) {
@@ -41,35 +32,55 @@ function genSpark(id) {
   return pts;
 }
 
-// Generate a ticker from name
-function genTicker(name) {
-  const clean = name.replace(/[^A-Za-z0-9 ]/g, "").toUpperCase();
-  const words = clean.split(/\s+/).filter(Boolean);
-  if (words.length === 1) return words[0].slice(0, 4);
-  return words.map(w => w[0]).join("").slice(0, 5);
-}
-
 // Convert registry entries to display format with seed data
 const PRODUCTS = REGISTRY.map(p => {
   const fund = getFundingData(p.id);
   const metrics = getKnownMetrics(p.id);
-  const seedMRR = metrics?.mrr ?? computeEstimatedMRR({
-    fundingTotal: fund?.total,
-    trafficVisits: null,
-    founded: p.yr,
-    category: p.cat,
-  });
+  const rev = getRevenueData(p.id);
+
+  // Revenue: prefer sourced data, fall back to funding estimate
+  let seedMRR = null;
+  let revenueConfidence = null;
+  let revenueReasoning = null;
+  let revenueSources = null;
+  let revenueSourceNames = null;
+
+  if (rev) {
+    seedMRR = rev.mrr;
+    revenueConfidence = rev.confidence;
+    revenueReasoning = rev.reasoning;
+    revenueSources = rev.sources;
+    revenueSourceNames = rev.sourceNames;
+  } else {
+    // Fall back to funding-based estimate
+    seedMRR = computeEstimatedMRR({
+      fundingTotal: fund?.total,
+      trafficVisits: null,
+      founded: p.yr,
+      category: p.cat,
+    });
+    if (seedMRR) {
+      revenueConfidence = "low";
+      revenueReasoning = `Estimated from ${fund?.total ? "$" + (fund.total / 1e6).toFixed(0) + "M funding" : "category benchmarks"}, ${p.yr ? (2026 - parseInt(p.yr)) + " years old" : "unknown age"}`;
+      revenueSourceNames = "Estimated";
+    }
+  }
+
   const seedMAU = metrics?.mau ?? null;
 
   return {
     id: p.id,
     name: p.name,
-    ticker: genTicker(p.name),
+    ticker: p.tk ? p.tk.symbol : null,
     category: p.cat,
-    logo: CAT_EMOJI[p.cat] || "◆",
+    logoDomain: p.w ? getDomain(p.w) : null,
     description: (p.tags || []).join(" · ") || p.cat,
     mrr: seedMRR, mrrChange: null,
     mrrHist: [],
+    revenueConfidence,
+    revenueReasoning,
+    revenueSources,
+    revenueSourceNames,
     mau: seedMAU, mauChange: null, dau: null,
     githubStars: null, starVelocity: null,
     teamSize: null, teamGrowth: null,
@@ -80,7 +91,7 @@ const PRODUCTS = REGISTRY.map(p => {
     uptime: null, latencyMs: null, errorRate: null,
     sentiment: null, nps: null,
     verifications: {
-      revenue: metrics?.mrr ? "funding_estimate" : seedMRR ? "funding_estimate" : "self",
+      revenue: rev ? rev.confidence : seedMRR ? "funding_estimate" : "self",
       usage: metrics?.mau ? "traffic_estimate" : "self",
       community: p.g ? "github" : p.d ? "discord" : "self",
       uptime: "self",
@@ -136,7 +147,7 @@ const fmtP = (n) => {
 };
 const isV = (s) => s && s !== "self";
 const vCount = (v) => Object.values(v).filter(isV).length;
-const SRC = { stripe: "Stripe", posthog: "PostHog", analytics: "Analytics", cloudflare: "Cloudflare", github: "GitHub", discord: "Discord", betterstack: "BetterStack", linkedin: "LinkedIn", self: "Self-Reported", traffic_estimate: "Traffic Est.", funding_estimate: "Funding Est.", social_estimate: "Social Est." };
+const SRC = { stripe: "Stripe", posthog: "PostHog", analytics: "Analytics", cloudflare: "Cloudflare", github: "GitHub", discord: "Discord", betterstack: "BetterStack", linkedin: "LinkedIn", self: "Self-Reported", traffic_estimate: "Traffic Est.", funding_estimate: "Funding Est.", social_estimate: "Social Est.", high: "Verified", medium: "Reported", low: "Estimated" };
 
 // Estimated MRR from available signals
 function getCategoryARPU(category) {
@@ -163,6 +174,23 @@ function computeEstimatedMRR({ fundingTotal, trafficVisits, founded, category })
 // ============================================================
 // MICRO COMPONENTS
 // ============================================================
+function ProductLogo({ product, size = 32 }) {
+  const domain = product.logoDomain;
+  const fallback = product.name[0].toUpperCase();
+  const [err, setErr] = useState(false);
+
+  if (!domain || err) {
+    return <div style={{ width: size, height: size, borderRadius: size * 0.22, background: "var(--s2)", border: "1px solid var(--b1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: size * 0.45, fontWeight: 700, color: "var(--t3)", fontFamily: "var(--m)" }}>{fallback}</div>;
+  }
+
+  return <img src={`https://www.google.com/s2/favicons?domain=${domain}&sz=${size * 2}`} width={size} height={size} style={{ borderRadius: size * 0.22, objectFit: "contain", background: "#fff", border: "1px solid var(--b1)" }} onError={() => setErr(true)} alt="" />;
+}
+
+function ConfidenceDot({ level }) {
+  const colors = { high: "var(--up)", medium: "var(--y)", low: "var(--t4)" };
+  return <span style={{ width: 5, height: 5, borderRadius: "50%", background: colors[level] || "var(--t4)", display: "inline-block", marginRight: 3, boxShadow: level === "high" ? "0 0 4px rgba(22,163,74,.3)" : "none" }} />;
+}
+
 function Spark({ data, up, w = 110, h = 28 }) {
   const max = Math.max(...data), min = Math.min(...data), r = max - min || 1;
   const pts = data.map((v, i) => `${(i / (data.length - 1)) * w},${h - ((v - min) / r) * (h - 4) - 2}`).join(" ");
@@ -251,7 +279,7 @@ function DetailPanel({ p, onClose, onAlert }) {
   if (!p) return null;
 
   const grid = [
-    { l: "MRR", v: fmt$(p.mrr), c: p.mrrChange, s: p.verifications.revenue },
+    { l: p.revenueConfidence === "low" ? "Est. Revenue" : "Revenue", v: fmt$(p.mrr), c: p.mrrChange, s: p.verifications.revenue },
     { l: "MAU", v: fmtU(p.mau), c: p.mauChange, s: p.verifications.usage },
     { l: "DAU", v: fmtU(p.dau), c: null, s: p.verifications.usage },
     { l: "GitHub Stars", v: p.githubStars ? fmtU(p.githubStars) : "—", c: null, s: p.verifications.community },
@@ -272,11 +300,11 @@ function DetailPanel({ p, onClose, onAlert }) {
         {/* Header */}
         <div style={{ padding: "22px 26px 18px", borderBottom: "1px solid var(--b1)", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
-            <div style={{ width: 48, height: 48, borderRadius: 12, background: "var(--s2)", border: "1px solid var(--b1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 24 }}>{p.logo}</div>
+            <ProductLogo product={p} size={48} />
             <div>
               <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 3 }}>
                 <h2 style={{ fontSize: 18, fontWeight: 700, color: "var(--t1)", fontFamily: "var(--m)", margin: 0, letterSpacing: "-.01em" }}>{p.name}</h2>
-                <span style={{ fontSize: 11, color: "var(--t3)", fontFamily: "var(--m)" }}>${p.ticker}</span>
+                {p.ticker && <span style={{ fontSize: 11, color: "var(--y)", fontFamily: "var(--m)", fontWeight: 700 }}>${p.ticker}</span>}
                 {p.hot && <span style={{ fontSize: 8, padding: "2px 6px", borderRadius: 3, background: "rgba(255,68,80,.08)", color: "var(--r)", fontWeight: 700, letterSpacing: ".06em" }}>HOT</span>}
               </div>
               <p style={{ fontSize: 12, color: "var(--t2)", margin: 0, lineHeight: 1.4, maxWidth: 400 }}>{p.description}</p>
@@ -337,6 +365,30 @@ function DetailPanel({ p, onClose, onAlert }) {
             </div>
             <VMeter v={p.verifications} />
           </div>
+
+          {/* Revenue Sources & Reasoning */}
+          {p.revenueReasoning && (
+            <div className="card-inner" style={{ marginBottom: 18, padding: "14px 16px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
+                <span className="label-xs">Revenue Intelligence</span>
+                {p.revenueConfidence && <span style={{ fontSize: 8, padding: "2px 6px", borderRadius: 3, background: p.revenueConfidence === "high" ? "rgba(22,163,74,.08)" : p.revenueConfidence === "medium" ? "rgba(217,119,6,.08)" : "rgba(0,0,0,.04)", color: p.revenueConfidence === "high" ? "var(--up)" : p.revenueConfidence === "medium" ? "var(--y)" : "var(--t3)", fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase" }}>{p.revenueConfidence} confidence</span>}
+              </div>
+              <p style={{ fontSize: 11, color: "var(--t2)", lineHeight: 1.5, margin: "0 0 8px" }}>{p.revenueReasoning}</p>
+              {p.revenueSources && p.revenueSources.length > 0 && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                  {p.revenueSources.map((s, i) => (
+                    <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 8px", borderRadius: 4, background: "rgba(0,0,0,.02)" }}>
+                      <span style={{ fontSize: 10, fontWeight: 600, color: "var(--t1)" }}>{s.name}</span>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <span style={{ fontSize: 10, fontWeight: 700, fontFamily: "var(--m)", color: "var(--t1)" }}>{fmt$(s.value)}/yr</span>
+                        <span style={{ fontSize: 9, color: "var(--t3)" }}>{s.date}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Revenue Chart */}
           {p.mrrHist && p.mrrHist.length > 0 && (
@@ -618,7 +670,7 @@ export default function AgentScreener() {
     setAlertProduct(product);
   }, [user]);
 
-  // Enrich products with pipeline data
+  // Enrich products with pipeline data (overlays on top of seed data)
   const enriched = useMemo(() => {
     return PRODUCTS.map(p => {
       const pd = pipelineData[p.id];
@@ -631,12 +683,17 @@ export default function AgentScreener() {
       const jobs = pd.jobs;
       const trafficVisits = traffic?.estimate?.estimated_monthly_visits ?? null;
       const fundTotal = fund?.total ?? p.fundingTotal;
-      const estMRR = computeEstimatedMRR({
-        fundingTotal: fundTotal,
-        trafficVisits,
-        founded: p.founded,
-        category: p.category,
-      });
+
+      // Pipeline MRR: only override if no sourced revenue data exists
+      let mrr = p.mrr;
+      let revConf = p.revenueConfidence;
+      let revSrcNames = p.revenueSourceNames;
+      if (!p.revenueSources && trafficVisits) {
+        mrr = computeEstimatedMRR({ fundingTotal: fundTotal, trafficVisits, founded: p.founded, category: p.category });
+        revConf = "low";
+        revSrcNames = "Traffic Est.";
+      }
+
       const estMAU = trafficVisits ?? social?.followers ?? p.mau;
 
       return {
@@ -653,14 +710,16 @@ export default function AgentScreener() {
         trafficRank: traffic?.rank?.rank ?? null,
         xFollowers: social?.followers ?? null,
         teamSize: jobs?.total_openings ? `${jobs.total_openings} open roles` : p.teamSize,
-        mrr: estMRR,
+        mrr,
         mau: estMAU,
+        revenueConfidence: revConf,
+        revenueSourceNames: revSrcNames,
         verifications: {
           ...p.verifications,
           community: gh ? "github" : p.verifications.community,
           uptime: uptime ? "betterstack" : p.verifications.uptime,
           team: fund ? "crunchbase" : p.verifications.team,
-          revenue: estMRR ? (trafficVisits ? "traffic_estimate" : "funding_estimate") : p.verifications.revenue,
+          revenue: revConf || p.verifications.revenue,
           usage: trafficVisits ? "traffic_estimate" : social?.followers ? "social_estimate" : p.verifications.usage,
         },
       };
@@ -671,7 +730,7 @@ export default function AgentScreener() {
     return enriched
       .filter(p => !wlFilter || wl.has(p.id))
       .filter(p => cat === "All" || p.category === cat)
-      .filter(p => { const s = q.toLowerCase(); return !s || p.name.toLowerCase().includes(s) || p.ticker.toLowerCase().includes(s) || p.category.toLowerCase().includes(s); })
+      .filter(p => { const s = q.toLowerCase(); return !s || p.name.toLowerCase().includes(s) || (p.ticker && p.ticker.toLowerCase().includes(s)) || p.category.toLowerCase().includes(s); })
       .sort((a, b) => {
         if (sort === "name") return a.name.localeCompare(b.name);
         return (b[sort] ?? -Infinity) - (a[sort] ?? -Infinity);
@@ -793,17 +852,17 @@ export default function AgentScreener() {
               <div key={p.id} className="mover" onClick={() => setSel(p)} style={{ animation: `su .25s ease ${i * .04}s both` }}>
                 <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                    <span style={{ fontSize: 18 }}>{p.logo}</span>
+                    <ProductLogo product={p} size={24} />
                     <div>
                       <div style={{ fontSize: 12, fontWeight: 700 }}>{p.name}</div>
-                      <div style={{ fontSize: 9, color: "var(--t3)", fontFamily: "var(--m)" }}>${p.ticker}</div>
+                      {p.ticker ? <div style={{ fontSize: 9, color: "var(--y)", fontFamily: "var(--m)", fontWeight: 700 }}>${p.ticker}</div> : <div style={{ fontSize: 9, color: "var(--t4)" }}>{p.category}</div>}
                     </div>
                   </div>
                   <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: "var(--g)" }}>{p.githubStars ? fmtU(p.githubStars) + " ★" : p.founded || "—"}</span>
                 </div>
                 <Spark data={p.spark} up={(p.mrrChange || 0) >= 0} w={155} h={24} />
                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 9, color: "var(--t3)" }}>
-                  <span>{p.mrr ? fmt$(p.mrr) + " MRR" : "—"}</span>
+                  <span>{p.mrr ? <><ConfidenceDot level={p.revenueConfidence} />{fmt$(p.mrr)} /mo</> : "—"}</span>
                   <span>{p.mau ? fmtU(p.mau) + " MAU" : "—"}</span>
                 </div>
               </div>
@@ -833,29 +892,29 @@ export default function AgentScreener() {
         {/* TABLE */}
         {view === "table" && <>
           <div className="row-h" style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--t3)" }}>
-            <span>#</span><span>Product</span><span style={{ textAlign: "right" }}>Est. MRR</span><span style={{ textAlign: "right" }}>Est. MAU</span><span style={{ textAlign: "right" }}>GitHub</span><span style={{ textAlign: "right" }}>Links</span><span style={{ textAlign: "center" }}>Sources</span><span style={{ textAlign: "right" }}>30d</span><span></span>
+            <span>#</span><span>Product</span><span style={{ textAlign: "right" }}>Revenue /mo</span><span style={{ textAlign: "right" }}>MAU</span><span style={{ textAlign: "right" }}>GitHub</span><span style={{ textAlign: "right" }}>Links</span><span style={{ textAlign: "center" }}>Sources</span><span style={{ textAlign: "right" }}>30d</span><span></span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
             {filtered.map((p, i) => (
               <div key={p.id} className="row" onClick={() => setSel(p)} style={{ animation: `su .2s ease ${i * .02}s both`, background: i % 2 === 0 ? "rgba(0,0,0,.01)" : "transparent" }}>
                 <span style={{ fontSize: 10, color: "var(--t3)", fontFamily: "var(--m)", fontWeight: 700 }}>{i + 1}</span>
                 <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 7, background: "var(--s2)", border: "1px solid var(--b1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{p.logo}</div>
+                  <ProductLogo product={p} size={32} />
                   <div>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
                       <span style={{ fontSize: 12.5, fontWeight: 700 }}>{p.name}</span>
+                      {p.ticker && <span style={{ fontSize: 8, padding: "1px 5px", borderRadius: 3, background: "rgba(217,119,6,.06)", color: "var(--y)", fontWeight: 700, fontFamily: "var(--m)" }}>${p.ticker}</span>}
                       {p.hot && <span style={{ fontSize: 7, padding: "1px 4px", borderRadius: 2, background: "rgba(255,68,80,.08)", color: "var(--r)", fontWeight: 800, letterSpacing: ".06em" }}>HOT</span>}
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 5, marginTop: 1 }}>
-                      <span style={{ fontSize: 9.5, color: "var(--t3)", fontFamily: "var(--m)" }}>${p.ticker}</span>
-                      <span style={{ fontSize: 8, color: "var(--t4)" }}>•</span>
-                      <span style={{ fontSize: 9, color: "var(--t4)" }}>{p.category}</span>
-                    </div>
+                    <span style={{ fontSize: 9, color: "var(--t4)" }}>{p.category}</span>
                   </div>
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, fontFamily: "var(--m)", color: p.mrr ? "var(--t1)" : "var(--t3)" }}>{fmt$(p.mrr)}</div>
-                  <div style={{ fontSize: 9, color: p.mrr ? "var(--up)" : "var(--t4)" }}>{p.mrr ? (SRC[p.verifications.revenue] || "est.") : ""}</div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 3 }}>
+                    {p.revenueConfidence && <ConfidenceDot level={p.revenueConfidence} />}
+                    <span style={{ fontSize: 12, fontWeight: 700, fontFamily: "var(--m)", color: p.mrr ? "var(--t1)" : "var(--t3)" }}>{fmt$(p.mrr)}</span>
+                  </div>
+                  <div style={{ fontSize: 9, color: p.revenueConfidence === "high" ? "var(--up)" : p.revenueConfidence === "medium" ? "var(--y)" : "var(--t4)" }}>{p.revenueSourceNames || ""}</div>
                 </div>
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontSize: 12, fontWeight: 700, fontFamily: "var(--m)", color: p.mau ? "var(--t1)" : "var(--t3)" }}>{fmtU(p.mau)}</div>
@@ -888,25 +947,30 @@ export default function AgentScreener() {
               >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
-                    <div style={{ width: 34, height: 34, borderRadius: 8, background: "var(--s2)", border: "1px solid var(--b1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17 }}>{p.logo}</div>
+                    <ProductLogo product={p} size={34} />
                     <div>
                       <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
                         <span style={{ fontSize: 13, fontWeight: 700 }}>{p.name}</span>
+                        {p.ticker && <span style={{ fontSize: 8, padding: "1px 5px", borderRadius: 3, background: "rgba(217,119,6,.06)", color: "var(--y)", fontWeight: 700, fontFamily: "var(--m)" }}>${p.ticker}</span>}
                         {p.hot && <span style={{ fontSize: 7, padding: "1px 4px", borderRadius: 2, background: "rgba(255,68,80,.08)", color: "var(--r)", fontWeight: 800 }}>HOT</span>}
                       </div>
-                      <span style={{ fontSize: 9, color: "var(--t3)", fontFamily: "var(--m)" }}>${p.ticker} • {p.category}</span>
+                      <span style={{ fontSize: 9, color: "var(--t3)" }}>{p.category}</span>
                     </div>
                   </div>
                   <button className="wl-star" onClick={e => toggleWl(e, p.id)} style={{ color: wl.has(p.id) ? "var(--y)" : "var(--t3)" }}>{wl.has(p.id) ? "★" : "☆"}</button>
                 </div>
                 <div style={{ display: "flex", gap: 12, marginBottom: 12, padding: "10px 12px", borderRadius: 7, background: "var(--s2)", border: "1px solid var(--b1)" }}>
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--t3)", marginBottom: 3 }}>Est. MRR</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 3, marginBottom: 3 }}>
+                      {p.revenueConfidence && <ConfidenceDot level={p.revenueConfidence} />}
+                      <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--t3)" }}>{p.revenueConfidence === "low" ? "Est. Rev" : "Revenue"}</span>
+                    </div>
                     <div style={{ fontSize: 15, fontWeight: 800, fontFamily: "var(--m)", color: p.mrr ? "var(--t1)" : "var(--t3)" }}>{fmt$(p.mrr)}</div>
+                    {p.revenueSourceNames && <div style={{ fontSize: 7, color: p.revenueConfidence === "high" ? "var(--up)" : "var(--t4)", marginTop: 2 }}>{p.revenueSourceNames}</div>}
                   </div>
                   <div style={{ width: 1, background: "var(--b1)" }} />
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--t3)", marginBottom: 3 }}>Est. MAU</div>
+                    <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--t3)", marginBottom: 3 }}>MAU</div>
                     <div style={{ fontSize: 15, fontWeight: 800, fontFamily: "var(--m)", color: p.mau ? "var(--t1)" : "var(--t3)" }}>{fmtU(p.mau)}</div>
                   </div>
                   <div style={{ width: 1, background: "var(--b1)" }} />
