@@ -4,8 +4,8 @@ import ProductDetail, { THEME_VARS, SHARED_STYLES } from "@/app/components/Produ
 export default function ProductPageClient({ product }) {
   return (
     <div style={{ ...THEME_VARS, minHeight: "100vh", background: "var(--bg)", fontFamily: "var(--f)" }}>
-      <style>{SHARED_STYLES}</style>
-      <style>{`@keyframes fi { from { opacity: 0 } to { opacity: 1 } }`}</style>
+      <style suppressHydrationWarning>{SHARED_STYLES}</style>
+      <style suppressHydrationWarning>{`@keyframes fi { from { opacity: 0 } to { opacity: 1 } }`}</style>
 
       {/* Header */}
       <header style={{ padding: "0 24px", height: 52, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--b1)", background: "rgba(244,245,247,.92)", backdropFilter: "blur(20px)" }}>

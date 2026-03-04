@@ -68,6 +68,7 @@ export default function LandingPage() {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 24 }}>
           <a href="/dashboard" style={{ fontSize: 13, color: "var(--t2)", textDecoration: "none", fontWeight: 500 }}>Dashboard</a>
+          <a href="/scanner" style={{ fontSize: 13, color: "var(--t2)", textDecoration: "none", fontWeight: 500 }}>Scanner</a>
           <a href="/dashboard" style={{ padding: "8px 20px", borderRadius: 8, background: "var(--g)", color: "#FFF", fontSize: 13, fontWeight: 700, textDecoration: "none", letterSpacing: ".01em" }}>Get Started</a>
         </div>
       </nav>

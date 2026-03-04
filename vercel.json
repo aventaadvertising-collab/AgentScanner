@@ -22,6 +22,22 @@
     {
       "path": "/api/pipeline?source=social&secret=${PIPELINE_SECRET}",
       "schedule": "0 */12 * * *"
+    },
+    {
+      "path": "/api/scanner?source=github&secret=${PIPELINE_SECRET}",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/scanner?source=pypi&secret=${PIPELINE_SECRET}",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/scanner?source=huggingface&secret=${PIPELINE_SECRET}",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/scanner?source=hackernews&secret=${PIPELINE_SECRET}",
+      "schedule": "*/10 * * * *"
     }
   ]
 }
