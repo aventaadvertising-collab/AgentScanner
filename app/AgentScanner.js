@@ -122,7 +122,29 @@ const fmtP = (n) => {
 };
 const isV = (s) => s && s !== "self";
 const vCount = (v) => Object.values(v).filter(isV).length;
-const SRC = { stripe: "Stripe", posthog: "PostHog", analytics: "Analytics", cloudflare: "Cloudflare", github: "GitHub", discord: "Discord", betterstack: "BetterStack", linkedin: "LinkedIn", self: "Self-Reported" };
+const SRC = { stripe: "Stripe", posthog: "PostHog", analytics: "Analytics", cloudflare: "Cloudflare", github: "GitHub", discord: "Discord", betterstack: "BetterStack", linkedin: "LinkedIn", self: "Self-Reported", traffic_estimate: "Traffic Est.", funding_estimate: "Funding Est.", social_estimate: "Social Est." };
+
+// Estimated MRR from available signals
+function getCategoryARPU(category) {
+  const HIGH = ["Customer Support AI", "Sales & GTM AI", "Legal AI", "Finance AI", "Healthcare AI"];
+  const MID = ["Code & Dev Tools", "Data & Analytics", "Productivity & Workspace", "AI Safety & Alignment"];
+  if (HIGH.includes(category)) return 50;
+  if (MID.includes(category)) return 25;
+  return 10;
+}
+
+function computeEstimatedMRR({ fundingTotal, trafficVisits, founded, category }) {
+  if (trafficVisits && trafficVisits > 10000) {
+    const arpu = getCategoryARPU(category);
+    return Math.round(trafficVisits * 0.01 * arpu);
+  }
+  if (fundingTotal && fundingTotal > 0 && founded) {
+    const yearsOld = Math.max(1, 2026 - parseInt(founded));
+    const est = fundingTotal * 0.04 * Math.min(yearsOld, 4) / 4;
+    return Math.round(est / 12);
+  }
+  return null;
+}
 
 // ============================================================
 // MICRO COMPONENTS
@@ -506,13 +528,47 @@ export default function AgentScreener() {
   const [authModal, setAuthModal] = useState(null); // "signin" | "signup" | null
   const [alertProduct, setAlertProduct] = useState(null);
   const [pipelineData, setPipelineData] = useState({});
+  const [lastUpdate, setLastUpdate] = useState(null);
+  const [, tick] = useState(0);
 
-  // Fetch pipeline data on mount
+  // Poll pipeline data every 60s
   useEffect(() => {
-    fetch("/api/data")
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { if (d?.products) setPipelineData(d.products); })
-      .catch(() => {});
+    const fetchData = () => {
+      fetch("/api/data")
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d?.products) { setPipelineData(d.products); setLastUpdate(new Date()); } })
+        .catch(() => {});
+    };
+    fetchData();
+    const interval = setInterval(fetchData, 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Supabase Realtime subscription for instant updates
+  useEffect(() => {
+    if (!supabase) return;
+    const channel = supabase
+      .channel("pipeline-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "pipeline_data" }, (payload) => {
+        const row = payload.new;
+        if (!row?.product_id || !row?.source) return;
+        setPipelineData(prev => ({
+          ...prev,
+          [row.product_id]: {
+            ...(prev[row.product_id] || {}),
+            [row.source]: { ...row.data, _fetched: row.fetched_at },
+          },
+        }));
+        setLastUpdate(new Date());
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [supabase]);
+
+  // Tick every 10s for "Xs ago" display
+  useEffect(() => {
+    const t = setInterval(() => tick(c => c + 1), 10_000);
+    return () => clearInterval(t);
   }, []);
 
   // Load watchlist from Supabase when user logs in
@@ -559,25 +615,39 @@ export default function AgentScreener() {
       const social = pd.social;
       const uptime = pd.uptime;
       const jobs = pd.jobs;
+      const trafficVisits = traffic?.estimate?.estimated_monthly_visits ?? null;
+      const fundTotal = fund?.total ?? p.fundingTotal;
+      const estMRR = computeEstimatedMRR({
+        fundingTotal: fundTotal,
+        trafficVisits,
+        founded: p.founded,
+        category: p.category,
+      });
+      const estMAU = trafficVisits ?? social?.followers ?? p.mau;
+
       return {
         ...p,
         githubStars: gh?.stars ?? p.githubStars,
         starVelocity: gh?.star_velocity_per_week ?? p.starVelocity,
-        fundingTotal: fund?.total ?? p.fundingTotal,
+        fundingTotal: fundTotal,
         lastRound: fund?.last_round ?? p.lastRound,
         valuation: fund?.valuation ?? p.valuation,
         investors: fund?.investors ?? p.investors,
         uptime: uptime?.uptime_pct ?? p.uptime,
         latencyMs: uptime?.latency_ms ?? p.latencyMs,
-        estimatedTraffic: traffic?.estimate?.monthly_visits ?? null,
+        estimatedTraffic: trafficVisits,
         trafficRank: traffic?.rank?.rank ?? null,
-        xFollowers: social?.followers_count ?? null,
+        xFollowers: social?.followers ?? null,
         teamSize: jobs?.total_openings ? `${jobs.total_openings} open roles` : p.teamSize,
+        mrr: estMRR,
+        mau: estMAU,
         verifications: {
           ...p.verifications,
           community: gh ? "github" : p.verifications.community,
           uptime: uptime ? "betterstack" : p.verifications.uptime,
           team: fund ? "crunchbase" : p.verifications.team,
+          revenue: estMRR ? (trafficVisits ? "traffic_estimate" : "funding_estimate") : p.verifications.revenue,
+          usage: trafficVisits ? "traffic_estimate" : social?.followers ? "social_estimate" : p.verifications.usage,
         },
       };
     });
@@ -642,9 +712,9 @@ export default function AgentScreener() {
         .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.3); backdrop-filter: blur(16px); display: flex; align-items: center; justify-content: center; z-index: 1000; animation: fi .15s ease; }
         .cat-btn { padding: 5px 11px; border-radius: 5px; border: 1px solid var(--b1); background: transparent; color: var(--t3); font-size: 11px; font-weight: 600; cursor: pointer; font-family: var(--f); transition: all .1s; }
         .cat-btn.on { border-color: rgba(37,99,235,.25); background: var(--gd); color: var(--g); }
-        .row { display: grid; grid-template-columns: 32px 2.2fr .9fr .9fr .8fr .7fr .65fr 100px 30px; padding: 11px 14px; border-radius: 7px; cursor: pointer; align-items: center; transition: all .1s; border: 1px solid transparent; }
+        .row { display: grid; grid-template-columns: 32px 2fr .85fr .85fr .75fr .7fr .55fr 90px 28px; padding: 11px 14px; border-radius: 7px; cursor: pointer; align-items: center; transition: all .1s; border: 1px solid transparent; }
         .row:hover { background: var(--sh); border-color: var(--b2); }
-        .row-h { display: grid; grid-template-columns: 32px 2.2fr .9fr .9fr .8fr .7fr .65fr 100px 30px; padding: 7px 14px; }
+        .row-h { display: grid; grid-template-columns: 32px 2fr .85fr .85fr .75fr .7fr .55fr 90px 28px; padding: 7px 14px; }
         .vb { font-weight: 600; letter-spacing: .04em; text-transform: uppercase; display: inline-flex; align-items: center; white-space: nowrap; }
         .mover { flex: 0 0 auto; min-width: 185px; padding: 13px 16px; border-radius: 10px; background: var(--s1); border: 1px solid var(--b1); cursor: pointer; transition: all .12s; }
         .mover:hover { background: var(--sh); border-color: var(--b2); }
@@ -665,6 +735,7 @@ export default function AgentScreener() {
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 600, color: "var(--g)" }}>
             <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--g)", animation: "lp 2s ease-in-out infinite", boxShadow: "0 0 6px var(--gg)" }} />LIVE
+            {lastUpdate && <span style={{ fontSize: 9, color: "var(--t3)", fontWeight: 500 }}>{Math.round((Date.now() - lastUpdate.getTime()) / 1000)}s ago</span>}
           </div>
           <div style={{ width: 1, height: 18, background: "var(--b2)" }} />
           <button onClick={() => setApply(true)} style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid rgba(37,99,235,.25)", background: "var(--gd)", color: "var(--g)", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "var(--f)" }}>+ Submit Product</button>
@@ -717,6 +788,10 @@ export default function AgentScreener() {
                   <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: "var(--g)" }}>{p.githubStars ? fmtU(p.githubStars) + " ★" : p.founded || "—"}</span>
                 </div>
                 <Spark data={p.spark} up={(p.mrrChange || 0) >= 0} w={155} h={24} />
+                <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 9, color: "var(--t3)" }}>
+                  <span>{p.mrr ? fmt$(p.mrr) + " MRR" : "—"}</span>
+                  <span>{p.mau ? fmtU(p.mau) + " MAU" : "—"}</span>
+                </div>
               </div>
             ))}
           </div>
@@ -744,7 +819,7 @@ export default function AgentScreener() {
         {/* TABLE */}
         {view === "table" && <>
           <div className="row-h" style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--t3)" }}>
-            <span>#</span><span>Product</span><span style={{ textAlign: "right" }}>GitHub</span><span style={{ textAlign: "right" }}>Founded</span><span style={{ textAlign: "right" }}>HQ</span><span style={{ textAlign: "right" }}>Links</span><span style={{ textAlign: "center" }}>Sources</span><span style={{ textAlign: "right" }}>30d</span><span></span>
+            <span>#</span><span>Product</span><span style={{ textAlign: "right" }}>Est. MRR</span><span style={{ textAlign: "right" }}>Est. MAU</span><span style={{ textAlign: "right" }}>GitHub</span><span style={{ textAlign: "right" }}>Links</span><span style={{ textAlign: "center" }}>Sources</span><span style={{ textAlign: "right" }}>30d</span><span></span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
             {filtered.map((p, i) => (
@@ -765,15 +840,16 @@ export default function AgentScreener() {
                   </div>
                 </div>
                 <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, fontFamily: "var(--m)", color: p.mrr ? "var(--t1)" : "var(--t3)" }}>{fmt$(p.mrr)}</div>
+                  <div style={{ fontSize: 9, color: p.mrr ? "var(--up)" : "var(--t4)" }}>{p.mrr ? (SRC[p.verifications.revenue] || "est.") : ""}</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, fontFamily: "var(--m)", color: p.mau ? "var(--t1)" : "var(--t3)" }}>{fmtU(p.mau)}</div>
+                  <div style={{ fontSize: 9, color: p.mau ? "var(--up)" : "var(--t4)" }}>{p.mau ? (SRC[p.verifications.usage] || "est.") : ""}</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
                   <div style={{ fontSize: 12, fontWeight: 700, fontFamily: "var(--m)" }}>{p.githubStars ? fmtU(p.githubStars) + " ★" : p.github ? "✓" : "—"}</div>
                   <div style={{ fontSize: 9, color: p.github ? "var(--up)" : "var(--t4)" }}>{p.starVelocity ? `+${p.starVelocity}/wk` : p.github ? `${p.github.o}/${p.github.r}`.slice(0, 18) : "closed"}</div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, fontFamily: "var(--m)" }}>{p.founded || "—"}</div>
-                  <div style={{ fontSize: 9, color: "var(--t3)" }}>{p.age || ""}</div>
-                </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 11, fontWeight: 500, color: "var(--t2)" }}>{p.hq || "—"}</div>
                 </div>
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: 4 }}>
                   {p.website && <a href={p.website} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 10, color: "var(--g)", textDecoration: "none", padding: "2px 5px", borderRadius: 3, background: "var(--gd)" }}>↗</a>}
@@ -809,10 +885,23 @@ export default function AgentScreener() {
                   </div>
                   <button className="wl-star" onClick={e => toggleWl(e, p.id)} style={{ color: wl.has(p.id) ? "var(--y)" : "var(--t3)" }}>{wl.has(p.id) ? "★" : "☆"}</button>
                 </div>
-                <div style={{ marginBottom: 12 }}><Spark data={p.spark} up={true} w={230} h={32} /></div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginBottom: 10 }}>
-                  {(p.tags || []).slice(0, 4).map((t, j) => <span key={j} style={{ fontSize: 8, padding: "2px 6px", borderRadius: 3, background: "var(--s2)", color: "var(--t3)", border: "1px solid var(--b1)" }}>{t}</span>)}
+                <div style={{ display: "flex", gap: 12, marginBottom: 12, padding: "10px 12px", borderRadius: 7, background: "var(--s2)", border: "1px solid var(--b1)" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--t3)", marginBottom: 3 }}>Est. MRR</div>
+                    <div style={{ fontSize: 15, fontWeight: 800, fontFamily: "var(--m)", color: p.mrr ? "var(--t1)" : "var(--t3)" }}>{fmt$(p.mrr)}</div>
+                  </div>
+                  <div style={{ width: 1, background: "var(--b1)" }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--t3)", marginBottom: 3 }}>Est. MAU</div>
+                    <div style={{ fontSize: 15, fontWeight: 800, fontFamily: "var(--m)", color: p.mau ? "var(--t1)" : "var(--t3)" }}>{fmtU(p.mau)}</div>
+                  </div>
+                  <div style={{ width: 1, background: "var(--b1)" }} />
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontSize: 8, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--t3)", marginBottom: 3 }}>Funding</div>
+                    <div style={{ fontSize: 15, fontWeight: 800, fontFamily: "var(--m)", color: p.fundingTotal ? "var(--t1)" : "var(--t3)" }}>{fmt$(p.fundingTotal)}</div>
+                  </div>
                 </div>
+                <div style={{ marginBottom: 10 }}><Spark data={p.spark} up={true} w={230} h={28} /></div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div style={{ display: "flex", gap: 4 }}>
                     {p.website && <a href={p.website} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 9, color: "var(--g)", textDecoration: "none", padding: "2px 6px", borderRadius: 3, background: "var(--gd)" }}>↗ Site</a>}

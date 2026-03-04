@@ -50,3 +50,7 @@ ALTER TABLE public.pipeline_runs ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Pipeline data is public" ON public.pipeline_data FOR SELECT USING (true);
 CREATE POLICY "Uptime checks are public" ON public.uptime_checks FOR SELECT USING (true);
 CREATE POLICY "Pipeline runs are public" ON public.pipeline_runs FOR SELECT USING (true);
+
+-- Enable Supabase Realtime for live frontend updates
+ALTER PUBLICATION supabase_realtime ADD TABLE public.pipeline_data;
+ALTER TABLE public.pipeline_data REPLICA IDENTITY FULL;
