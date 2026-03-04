@@ -1,8 +1,8 @@
 // ============================================================
-// SCANNER API ROUTE
+// SCANNER API ROUTE v2
 // GET /api/scanner?secret=...&source=github  → cron-triggered scan
 // GET /api/scanner                           → public feed
-// GET /api/scanner?source=github             → filtered feed
+// 8 sources: github, pypi, huggingface, hackernews, npm, reddit, producthunt, arxiv
 // ============================================================
 
 import { createClient } from "@supabase/supabase-js";
@@ -10,12 +10,33 @@ import { scanGitHub } from "@/lib/scanner/github";
 import { scanPyPI } from "@/lib/scanner/pypi";
 import { scanHuggingFace } from "@/lib/scanner/huggingface";
 import { scanHackerNews } from "@/lib/scanner/hackernews";
+import { scanNpm } from "@/lib/scanner/npm";
+import { scanReddit } from "@/lib/scanner/reddit";
+import { scanProductHunt } from "@/lib/scanner/producthunt";
+import { scanArxiv } from "@/lib/scanner/arxiv";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !key) return null;
   return createClient(url, key);
+}
+
+// Batch upsert discoveries (single DB round-trip instead of N)
+async function batchUpsert(supabase, discoveries) {
+  if (!discoveries.length) return;
+  const { error } = await supabase
+    .from("scanner_discoveries")
+    .upsert(discoveries, { onConflict: "source,external_id" });
+  if (error) console.log(`[Scanner] Upsert error: ${error.message}`);
+}
+
+// Update scan state watermark
+async function updateState(supabase, source, updates) {
+  await supabase.from("scanner_state").upsert(
+    { source, ...updates },
+    { onConflict: "source" }
+  );
 }
 
 export async function GET(request) {
@@ -43,109 +64,116 @@ export async function GET(request) {
     const results = {};
     const scanSource = source || "all";
 
-    // ── GitHub ──
-    if (scanSource === "all" || scanSource === "github") {
-      const ghState = stateMap.github || {};
-      const { discoveries, newLastEventId } = await scanGitHub(
-        process.env.GITHUB_TOKEN,
-        ghState.last_event_id
-      );
-
-      for (const d of discoveries) {
-        await supabase
-          .from("scanner_discoveries")
-          .upsert(d, { onConflict: "source,external_id" });
-      }
-
-      await supabase.from("scanner_state").upsert(
-        {
-          source: "github",
+    try {
+      // ── GitHub ──
+      if (scanSource === "all" || scanSource === "github") {
+        const ghState = stateMap.github || {};
+        const { discoveries, newLastEventId } = await scanGitHub(
+          process.env.GITHUB_TOKEN,
+          ghState.last_event_id
+        );
+        await batchUpsert(supabase, discoveries);
+        await updateState(supabase, "github", {
           last_scan_at: new Date().toISOString(),
           last_event_id: newLastEventId,
-          items_found_total:
-            (ghState.items_found_total || 0) + discoveries.length,
-        },
-        { onConflict: "source" }
-      );
-      results.github = discoveries.length;
-    }
-
-    // ── PyPI ──
-    if (scanSource === "all" || scanSource === "pypi") {
-      const pypiState = stateMap.pypi || {};
-      const { discoveries, newLastScanAt } = await scanPyPI(
-        pypiState.last_scan_at
-      );
-
-      for (const d of discoveries) {
-        await supabase
-          .from("scanner_discoveries")
-          .upsert(d, { onConflict: "source,external_id" });
+          items_found_total: (ghState.items_found_total || 0) + discoveries.length,
+        });
+        results.github = discoveries.length;
       }
 
-      await supabase.from("scanner_state").upsert(
-        {
-          source: "pypi",
+      // ── PyPI ──
+      if (scanSource === "all" || scanSource === "pypi") {
+        const pypiState = stateMap.pypi || {};
+        const { discoveries, newLastScanAt } = await scanPyPI(pypiState.last_scan_at);
+        await batchUpsert(supabase, discoveries);
+        await updateState(supabase, "pypi", {
           last_scan_at: newLastScanAt,
-          last_event_id: null,
-          items_found_total:
-            (pypiState.items_found_total || 0) + discoveries.length,
-        },
-        { onConflict: "source" }
-      );
-      results.pypi = discoveries.length;
-    }
-
-    // ── HuggingFace ──
-    if (scanSource === "all" || scanSource === "huggingface") {
-      const hfState = stateMap.huggingface || {};
-      const { discoveries, newLastScanAt } = await scanHuggingFace(
-        hfState.last_scan_at
-      );
-
-      for (const d of discoveries) {
-        await supabase
-          .from("scanner_discoveries")
-          .upsert(d, { onConflict: "source,external_id" });
+          items_found_total: (pypiState.items_found_total || 0) + discoveries.length,
+        });
+        results.pypi = discoveries.length;
       }
 
-      await supabase.from("scanner_state").upsert(
-        {
-          source: "huggingface",
+      // ── HuggingFace ──
+      if (scanSource === "all" || scanSource === "huggingface") {
+        const hfState = stateMap.huggingface || {};
+        const { discoveries, newLastScanAt } = await scanHuggingFace(hfState.last_scan_at);
+        await batchUpsert(supabase, discoveries);
+        await updateState(supabase, "huggingface", {
           last_scan_at: newLastScanAt,
-          last_event_id: null,
-          items_found_total:
-            (hfState.items_found_total || 0) + discoveries.length,
-        },
-        { onConflict: "source" }
-      );
-      results.huggingface = discoveries.length;
-    }
-
-    // ── Hacker News ──
-    if (scanSource === "all" || scanSource === "hackernews") {
-      const hnState = stateMap.hackernews || {};
-      const { discoveries, newLastItemId } = await scanHackerNews(
-        hnState.last_event_id
-      );
-
-      for (const d of discoveries) {
-        await supabase
-          .from("scanner_discoveries")
-          .upsert(d, { onConflict: "source,external_id" });
+          items_found_total: (hfState.items_found_total || 0) + discoveries.length,
+        });
+        results.huggingface = discoveries.length;
       }
 
-      await supabase.from("scanner_state").upsert(
-        {
-          source: "hackernews",
+      // ── Hacker News ──
+      if (scanSource === "all" || scanSource === "hackernews") {
+        const hnState = stateMap.hackernews || {};
+        const { discoveries, newLastItemId } = await scanHackerNews(hnState.last_event_id);
+        await batchUpsert(supabase, discoveries);
+        await updateState(supabase, "hackernews", {
           last_scan_at: new Date().toISOString(),
           last_event_id: newLastItemId,
-          items_found_total:
-            (hnState.items_found_total || 0) + discoveries.length,
-        },
-        { onConflict: "source" }
-      );
-      results.hackernews = discoveries.length;
+          items_found_total: (hnState.items_found_total || 0) + discoveries.length,
+        });
+        results.hackernews = discoveries.length;
+      }
+
+      // ── npm ──
+      if (scanSource === "all" || scanSource === "npm") {
+        const npmState = stateMap.npm || {};
+        const { discoveries, newLastScanAt } = await scanNpm(npmState.last_scan_at);
+        await batchUpsert(supabase, discoveries);
+        await updateState(supabase, "npm", {
+          last_scan_at: newLastScanAt,
+          items_found_total: (npmState.items_found_total || 0) + discoveries.length,
+        });
+        results.npm = discoveries.length;
+      }
+
+      // ── Reddit ──
+      if (scanSource === "all" || scanSource === "reddit") {
+        const redditState = stateMap.reddit || {};
+        const { discoveries, newLastScanAt } = await scanReddit(redditState.last_scan_at);
+        await batchUpsert(supabase, discoveries);
+        await updateState(supabase, "reddit", {
+          last_scan_at: newLastScanAt,
+          items_found_total: (redditState.items_found_total || 0) + discoveries.length,
+        });
+        results.reddit = discoveries.length;
+      }
+
+      // ── Product Hunt ──
+      if (scanSource === "all" || scanSource === "producthunt") {
+        const phState = stateMap.producthunt || {};
+        const { discoveries, newLastScanAt } = await scanProductHunt(phState.last_scan_at);
+        await batchUpsert(supabase, discoveries);
+        await updateState(supabase, "producthunt", {
+          last_scan_at: newLastScanAt,
+          items_found_total: (phState.items_found_total || 0) + discoveries.length,
+        });
+        results.producthunt = discoveries.length;
+      }
+
+      // ── arXiv ──
+      if (scanSource === "all" || scanSource === "arxiv") {
+        const arxivState = stateMap.arxiv || {};
+        const { discoveries, newLastScanAt } = await scanArxiv(arxivState.last_scan_at);
+        await batchUpsert(supabase, discoveries);
+        await updateState(supabase, "arxiv", {
+          last_scan_at: newLastScanAt,
+          items_found_total: (arxivState.items_found_total || 0) + discoveries.length,
+        });
+        results.arxiv = discoveries.length;
+      }
+    } catch (err) {
+      console.error(`[Scanner] Error in ${scanSource}: ${err.message}`);
+      return Response.json({
+        success: false,
+        source: scanSource,
+        error: err.message,
+        results,
+        timestamp: new Date().toISOString(),
+      }, { status: 500 });
     }
 
     console.log(`[Scanner] Scan complete: ${JSON.stringify(results)}`);
@@ -161,7 +189,6 @@ export async function GET(request) {
   // ─── FEED MODE: no secret → return discoveries ───
   const supabase = getSupabaseAdmin();
   if (!supabase) {
-    // Return empty feed if DB not configured (works for build)
     return Response.json({
       discoveries: [],
       stats: { today: 0, this_hour: 0 },
