@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { CATEGORIES } from "@/lib/pipeline/registry";
 
@@ -27,26 +27,34 @@ export default function ScreenerClient() {
   const [catFilter, setCatFilter] = useState("All");
   const [q, setQ] = useState("");
   const [, setTick] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
 
   const supabase = useMemo(() => getSupabase(), []);
 
+  // ─── Fetch feed (shared between polling + manual refresh) ───
+  const fetchFeed = useCallback(() => {
+    return fetch("/api/scanner?limit=150")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.discoveries) {
+          setDiscoveries(d.discoveries);
+          setStats(d.stats);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleRefresh = useCallback(() => {
+    setRefreshing(true);
+    fetchFeed().finally(() => setTimeout(() => setRefreshing(false), 400));
+  }, [fetchFeed]);
+
   // ─── Polling ───
   useEffect(() => {
-    const fetchFeed = () => {
-      fetch("/api/scanner?limit=150")
-        .then((r) => (r.ok ? r.json() : null))
-        .then((d) => {
-          if (d?.discoveries) {
-            setDiscoveries(d.discoveries);
-            setStats(d.stats);
-          }
-        })
-        .catch(() => {});
-    };
     fetchFeed();
     const interval = setInterval(fetchFeed, 30_000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchFeed]);
 
   // ─── Supabase Realtime ───
   useEffect(() => {
@@ -139,6 +147,11 @@ export default function ScreenerClient() {
         @keyframes sl { 0% { transform: translateX(-100%) } 100% { transform: translateX(200%) } }
         @keyframes scan { 0% { transform: translateX(-100%) } 100% { transform: translateX(100%) } }
         @keyframes grid-move { from { transform: translateY(0) } to { transform: translateY(40px) } }
+        @keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
+        .refresh-btn { transition: all .12s; cursor: pointer; }
+        .refresh-btn:hover { background: rgba(255,255,255,.06) !important; border-color: var(--b2) !important; color: var(--t1) !important; }
+        .link-sm { transition: color .12s; text-decoration: none; }
+        .link-sm:hover { color: #2563EB !important; }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         ::selection { background: rgba(37,99,235,.3); }
         .feed-item { transition: background .15s; cursor: default; }
@@ -286,6 +299,28 @@ export default function ScreenerClient() {
             SCREENING
           </div>
           <div style={{ width: 1, height: 18, background: "var(--b2)" }} />
+          <button
+            className="refresh-btn"
+            onClick={handleRefresh}
+            disabled={refreshing}
+            style={{
+              padding: "6px 14px",
+              borderRadius: 6,
+              border: "1px solid var(--b1)",
+              background: "transparent",
+              color: "var(--t2)",
+              fontSize: 11,
+              fontWeight: 600,
+              fontFamily: "var(--f)",
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              opacity: refreshing ? 0.6 : 1,
+            }}
+          >
+            <span style={{ display: "inline-block", animation: refreshing ? "spin .6s linear infinite" : "none" }}>↻</span>
+            Refresh
+          </button>
           <a
             href="/dashboard"
             style={{
@@ -559,6 +594,17 @@ export default function ScreenerClient() {
   );
 }
 
+// ─── Source link label ───
+function sourceLabel(url) {
+  if (!url) return null;
+  if (url.includes("github.com")) return "Repo";
+  if (url.includes("pypi.org")) return "Package";
+  if (url.includes("huggingface.co/spaces")) return "Space";
+  if (url.includes("huggingface.co")) return "Model";
+  if (url.includes("ycombinator.com") || url.includes("news.ycombinator")) return "Discussion";
+  return "View";
+}
+
 // ─── Feed Item ───
 function FeedItem({ item, index }) {
   const confidence = Math.round((item.ai_confidence || 0) * 100);
@@ -637,9 +683,21 @@ function FeedItem({ item, index }) {
             {item.name}
           </a>
           {item.author && (
-            <span style={{ fontSize: 11, color: "var(--t3)", fontWeight: 500 }}>
-              {item.author}
-            </span>
+            item.author_url ? (
+              <a
+                href={item.author_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="link-sm"
+                style={{ fontSize: 11, color: "var(--t3)", fontWeight: 500 }}
+              >
+                {item.author}
+              </a>
+            ) : (
+              <span style={{ fontSize: 11, color: "var(--t3)", fontWeight: 500 }}>
+                {item.author}
+              </span>
+            )
           )}
         </div>
 
@@ -737,6 +795,35 @@ function FeedItem({ item, index }) {
             >
               ▲ {item.upvotes}
             </span>
+          )}
+
+          {/* Source links */}
+          {(item.url || item.author_url) && (
+            <>
+              <span style={{ color: "var(--b2)", fontSize: 10 }}>·</span>
+              {item.url && (
+                <a
+                  href={item.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="link-sm"
+                  style={{ fontSize: 10, fontWeight: 600, color: "var(--t3)" }}
+                >
+                  ↗ {sourceLabel(item.url)}
+                </a>
+              )}
+              {item.author_url && (
+                <a
+                  href={item.author_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="link-sm"
+                  style={{ fontSize: 10, fontWeight: 600, color: "var(--t3)" }}
+                >
+                  ◉ Profile
+                </a>
+              )}
+            </>
           )}
         </div>
       </div>

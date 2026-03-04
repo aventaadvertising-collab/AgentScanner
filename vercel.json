@@ -25,19 +25,19 @@
     },
     {
       "path": "/api/scanner?source=github&secret=${PIPELINE_SECRET}",
-      "schedule": "*/5 * * * *"
+      "schedule": "* * * * *"
     },
     {
       "path": "/api/scanner?source=pypi&secret=${PIPELINE_SECRET}",
-      "schedule": "*/5 * * * *"
+      "schedule": "* * * * *"
     },
     {
       "path": "/api/scanner?source=huggingface&secret=${PIPELINE_SECRET}",
-      "schedule": "*/5 * * * *"
+      "schedule": "* * * * *"
     },
     {
       "path": "/api/scanner?source=hackernews&secret=${PIPELINE_SECRET}",
-      "schedule": "*/10 * * * *"
+      "schedule": "* * * * *"
     }
   ]
 }
