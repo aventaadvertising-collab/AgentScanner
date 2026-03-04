@@ -365,30 +365,37 @@ export default function AgentScreener() {
   }), [enriched]);
 
   return (
-    <div id="app" style={{ "--bg": "#F4F5F7", "--s1": "#FFFFFF", "--s2": "rgba(0,0,0,.02)", "--sh": "rgba(0,0,0,.04)", "--b1": "rgba(0,0,0,.06)", "--b2": "rgba(0,0,0,.1)", "--t1": "#0F1218", "--t2": "rgba(15,18,24,.6)", "--t3": "rgba(15,18,24,.35)", "--t4": "rgba(15,18,24,.12)", "--g": "#2563EB", "--gg": "rgba(37,99,235,.25)", "--gd": "rgba(37,99,235,.06)", "--r": "#DC2626", "--y": "#D97706", "--up": "#16A34A", "--dn": "#DC2626", "--m": "'JetBrains Mono', 'SF Mono', 'Consolas', monospace", "--f": "'Helvetica Neue', Helvetica, Arial, sans-serif", minHeight: "100vh", background: "var(--bg)", color: "var(--t1)", fontFamily: "var(--f)" }}>
+    <div id="app" style={{ "--bg": "#07080C", "--s1": "#0D0F15", "--s2": "rgba(255,255,255,.02)", "--sh": "rgba(255,255,255,.04)", "--b1": "rgba(255,255,255,.06)", "--b2": "rgba(255,255,255,.1)", "--t1": "#EEEEF3", "--t2": "rgba(238,238,243,.55)", "--t3": "rgba(238,238,243,.3)", "--t4": "rgba(238,238,243,.12)", "--g": "#3B82F6", "--gg": "rgba(59,130,246,.2)", "--gd": "rgba(59,130,246,.06)", "--r": "#EF4444", "--y": "#F59E0B", "--up": "#10B981", "--dn": "#EF4444", "--m": "'SF Mono', 'JetBrains Mono', 'Fira Code', monospace", "--f": "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif", minHeight: "100vh", background: "var(--bg)", color: "var(--t1)", fontFamily: "var(--f)" }}>
 
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
+      <style suppressHydrationWarning>{`
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
         @keyframes fi { from { opacity: 0 } to { opacity: 1 } }
         @keyframes su { from { opacity: 0; transform: translateY(5px) } to { opacity: 1; transform: translateY(0) } }
         @keyframes lp { 0%,100% { opacity: 1 } 50% { opacity: .3 } }
         @keyframes sl { 0% { transform: translateX(-100%) } 100% { transform: translateX(200%) } }
+        @keyframes glow-pulse { 0%,100% { box-shadow: 0 0 20px rgba(59,130,246,.08) } 50% { box-shadow: 0 0 40px rgba(59,130,246,.15) } }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.15); }
+        ::selection { background: rgba(59,130,246,.3); }
+        @keyframes sl { 0% { transform: translateX(-100%) } 100% { transform: translateX(200%) } }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: rgba(0,0,0,.1); border-radius: 2px; }
+        ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 2px; }
         input::placeholder { color: rgba(15,18,24,.25); }
         select option { background: #FFFFFF; }
         .label-xs { font-size: 9px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--t3); }
-        .chip { font-size: 9px; padding: 2px 7px; border-radius: 3px; background: rgba(0,0,0,.03); color: var(--t2); font-weight: 600; letter-spacing: .03em; border: 1px solid var(--b1); }
+        .chip { font-size: 9px; padding: 2px 7px; border-radius: 3px; background: rgba(255,255,255,.03); color: var(--t2); font-weight: 600; letter-spacing: .03em; border: 1px solid var(--b1); }
         .chip-g { background: var(--gd); color: var(--g); border-color: rgba(37,99,235,.15); }
-        .card-inner { padding: 14px 16px; border-radius: 8px; background: var(--s2); border: 1px solid var(--b1); }
-        .input { width: 100%; padding: 9px 11px; border-radius: 7px; background: rgba(0,0,0,.025); border: 1px solid var(--b1); color: var(--t1); font-size: 12px; font-family: var(--f); outline: none; transition: border-color .15s; }
+        .card-inner { padding: 14px 16px; border-radius: 8px; background: rgba(255,255,255,.02); border: 1px solid var(--b1); }
+        .input { width: 100%; padding: 9px 11px; border-radius: 7px; background: rgba(255,255,255,.03); border: 1px solid var(--b1); color: var(--t1); font-size: 12px; font-family: var(--f); outline: none; transition: border-color .15s; }
         .input:focus { border-color: rgba(37,99,235,.4); }
-        .btn-primary { padding: 9px 24px; border-radius: 7px; border: none; background: var(--g); color: var(--bg); font-size: 12px; font-weight: 700; cursor: pointer; font-family: var(--f); letter-spacing: .01em; }
+        .btn-primary { padding: 9px 24px; border-radius: 7px; border: none; background: var(--g); color: #FFF; font-size: 12px; font-weight: 700; cursor: pointer; font-family: var(--f); letter-spacing: .01em; }
         .btn-primary:hover { opacity: .88; }
         .btn-ghost { padding: 9px 18px; border-radius: 7px; border: 1px solid var(--b1); background: transparent; color: var(--t2); font-size: 12px; font-weight: 600; cursor: pointer; font-family: var(--f); }
-        .btn-close { background: rgba(0,0,0,.03); border: 1px solid var(--b1); color: var(--t3); width: 30px; height: 30px; border-radius: 7px; cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center; }
-        .btn-close:hover { background: rgba(0,0,0,.06); }
-        .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.3); backdrop-filter: blur(16px); display: flex; align-items: center; justify-content: center; z-index: 1000; animation: fi .15s ease; }
+        .btn-close { background: rgba(255,255,255,.03); border: 1px solid var(--b1); color: var(--t3); width: 30px; height: 30px; border-radius: 7px; cursor: pointer; font-size: 13px; display: flex; align-items: center; justify-content: center; }
+        .btn-close:hover { background: rgba(255,255,255,.06); }
+        .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.6); backdrop-filter: blur(20px); display: flex; align-items: center; justify-content: center; z-index: 1000; animation: fi .15s ease; }
         .cat-btn { padding: 5px 11px; border-radius: 5px; border: 1px solid var(--b1); background: transparent; color: var(--t3); font-size: 11px; font-weight: 600; cursor: pointer; font-family: var(--f); transition: all .1s; }
         .cat-btn.on { border-color: rgba(37,99,235,.25); background: var(--gd); color: var(--g); }
         .row { display: grid; grid-template-columns: 32px 2fr .85fr .85fr .75fr .7fr .55fr 90px 28px; padding: 11px 14px; border-radius: 7px; cursor: pointer; align-items: center; transition: all .1s; border: 1px solid transparent; }
@@ -401,13 +408,13 @@ export default function AgentScreener() {
       `}</style>
 
       {/* HEADER */}
-      <header style={{ padding: "0 24px", height: 52, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--b1)", position: "sticky", top: 0, background: "rgba(244,245,247,.92)", backdropFilter: "blur(20px)", zIndex: 100 }}>
+      <header style={{ padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--b1)", position: "sticky", top: 0, background: "rgba(7,8,12,.85)", backdropFilter: "blur(24px) saturate(180%)", zIndex: 100 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 28, height: 28, borderRadius: 6, position: "relative", overflow: "hidden", background: "linear-gradient(135deg, #2563EB, #1D4ED8)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span style={{ fontSize: 12, fontWeight: 800, color: "#FFFFFF", fontFamily: "var(--m)" }}>AS</span>
-            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent)", animation: "sl 3s ease-in-out infinite" }} />
+          <div style={{ width: 30, height: 30, borderRadius: 8, position: "relative", overflow: "hidden", background: "linear-gradient(135deg, #3B82F6, #2563EB, #1D4ED8)", display: "flex", alignItems: "center", justifyContent: "center", animation: "glow-pulse 4s ease-in-out infinite" }}>
+            <span style={{ fontSize: 11, fontWeight: 800, color: "#FFF", fontFamily: "var(--m)", letterSpacing: ".02em" }}>AS</span>
+            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, transparent, rgba(255,255,255,.2), transparent)", animation: "sl 4s ease-in-out infinite" }} />
           </div>
-          <span style={{ fontSize: 14, fontWeight: 800, fontFamily: "var(--m)", letterSpacing: "-.01em" }}>
+          <span style={{ fontSize: 15, fontWeight: 800, fontFamily: "var(--m)", letterSpacing: "-.02em" }}>
             AGENT<span style={{ color: "var(--g)" }}>SCREENER</span>
           </span>
         </div>
@@ -440,7 +447,7 @@ export default function AgentScreener() {
       </header>
 
       {/* STATS BAR */}
-      <div style={{ padding: "10px 24px", display: "flex", gap: 24, borderBottom: "1px solid var(--b1)", background: "rgba(0,0,0,.008)" }}>
+      <div style={{ padding: "10px 24px", display: "flex", gap: 24, borderBottom: "1px solid var(--b1)", background: "rgba(255,255,255,.01)" }}>
         {[["Products", agg.n], ["Categories", agg.cats], ["Open Source", agg.gh], ["New This Month", newlyAdded.length], ...(hasPipelineData ? [["Total Stars", fmtU(agg.totalStars)]] : [["Crypto-AI", agg.tokens]])].map(([l, v], i) => (
           <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--t3)" }}>{l}</span>
@@ -523,8 +530,8 @@ export default function AgentScreener() {
             <select value={sort} onChange={e => setSort(e.target.value)} className="input" style={{ width: "auto", fontSize: 10, padding: "4px 8px", cursor: "pointer" }}>
               {SORTS.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
             </select>
-            <div style={{ display: "flex", gap: 1, background: "rgba(0,0,0,.03)", borderRadius: 5, padding: 2 }}>
-              {["table", "grid"].map(v => <button key={v} onClick={() => setView(v)} style={{ padding: "3px 7px", borderRadius: 3, border: "none", background: view === v ? "rgba(0,0,0,.07)" : "transparent", color: view === v ? "var(--t1)" : "var(--t3)", fontSize: 10, cursor: "pointer" }}>{v === "table" ? "☰" : "⊞"}</button>)}
+            <div style={{ display: "flex", gap: 1, background: "rgba(255,255,255,.03)", borderRadius: 5, padding: 2 }}>
+              {["table", "grid"].map(v => <button key={v} onClick={() => setView(v)} style={{ padding: "3px 7px", borderRadius: 3, border: "none", background: view === v ? "rgba(255,255,255,.06)" : "transparent", color: view === v ? "var(--t1)" : "var(--t3)", fontSize: 10, cursor: "pointer" }}>{v === "table" ? "☰" : "⊞"}</button>)}
             </div>
           </div>
         </div>
@@ -536,7 +543,7 @@ export default function AgentScreener() {
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
             {filtered.map((p, i) => (
-              <div key={p.id} className="row" onClick={() => setSel(p)} style={{ animation: `su .2s ease ${i * .02}s both`, background: i % 2 === 0 ? "rgba(0,0,0,.01)" : "transparent" }}>
+              <div key={p.id} className="row" onClick={() => setSel(p)} style={{ animation: `su .2s ease ${i * .02}s both`, background: i % 2 === 0 ? "rgba(255,255,255,.01)" : "transparent" }}>
                 <span style={{ fontSize: 10, color: "var(--t3)", fontFamily: "var(--m)", fontWeight: 700 }}>{i + 1}</span>
                 <div style={{ display: "flex", alignItems: "center", gap: 9 }}>
                   <ProductLogo product={p} size={32} />
