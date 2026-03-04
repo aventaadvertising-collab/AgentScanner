@@ -107,9 +107,9 @@ export default function LandingPage() {
       <section style={{ padding: "40px 48px 60px", position: "relative", zIndex: 10 }}>
         <div style={{ display: "flex", justifyContent: "center", gap: 48, animation: "fi .6s ease .4s both" }}>
           {[
-            { label: "Products Tracked", value: 155, suffix: "+" },
+            { label: "Products Tracked", value: 181, suffix: "+" },
             { label: "Categories", value: 28 },
-            { label: "Open Source Repos", value: 72 },
+            { label: "Open Source Repos", value: 85 },
             { label: "Data Sources", value: 6 },
           ].map((s, i) => (
             <div key={i} style={{ textAlign: "center" }}>
