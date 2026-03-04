@@ -599,9 +599,13 @@ function sourceLabel(url) {
   if (!url) return null;
   if (url.includes("github.com")) return "Repo";
   if (url.includes("pypi.org")) return "Package";
+  if (url.includes("npmjs.com") || url.includes("npmjs.org")) return "Package";
   if (url.includes("huggingface.co/spaces")) return "Space";
   if (url.includes("huggingface.co")) return "Model";
   if (url.includes("ycombinator.com") || url.includes("news.ycombinator")) return "Discussion";
+  if (url.includes("reddit.com")) return "Thread";
+  if (url.includes("producthunt.com")) return "Launch";
+  if (url.includes("arxiv.org")) return "Paper";
   return "View";
 }
 
