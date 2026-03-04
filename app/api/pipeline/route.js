@@ -41,8 +41,8 @@ export async function GET(request) {
     const ghToken = process.env.GITHUB_TOKEN;
     results.github = {};
     for (const product of REGISTRY) {
-      if (product.github) {
-        const data = await fetchGitHubMetrics(product.github.owner, product.github.repo, ghToken);
+      if (product.g) {
+        const data = await fetchGitHubMetrics(product.g.o, product.g.r, ghToken);
         results.github[product.id] = data;
         if (data && supabase) {
           await supabase.from("pipeline_data").upsert({
@@ -61,7 +61,8 @@ export async function GET(request) {
   if (source === "all" || source === "uptime") {
     results.uptime = {};
     for (const product of REGISTRY) {
-      const data = await checkUptime(product.website);
+      if (!product.w) continue;
+      const data = await checkUptime(product.w);
       results.uptime[product.id] = data;
       if (supabase) {
         // Append to uptime_checks table for history
@@ -81,9 +82,10 @@ export async function GET(request) {
   if (source === "all" || source === "traffic") {
     results.traffic = {};
     for (const product of REGISTRY) {
-      const rank = await fetchTrancoRank(product.website);
+      if (!product.w) continue;
+      const rank = await fetchTrancoRank(product.w);
       const estimate = rank ? estimateTrafficFromRank(rank.rank) : null;
-      const tech = await detectTechStack(product.website);
+      const tech = await detectTechStack(product.w);
       results.traffic[product.id] = { rank, estimate, tech };
       if (supabase) {
         await supabase.from("pipeline_data").upsert({
@@ -120,8 +122,8 @@ export async function GET(request) {
   if (source === "all" || source === "jobs") {
     results.jobs = {};
     for (const product of REGISTRY) {
-      if (product.careers) {
-        const data = await scrapeJobCount(product.careers);
+      if (product.c) {
+        const data = await scrapeJobCount(product.c);
         results.jobs[product.id] = data;
         if (data && supabase) {
           await supabase.from("pipeline_data").upsert({
@@ -142,8 +144,8 @@ export async function GET(request) {
     const xToken = process.env.X_BEARER_TOKEN;
     results.social = {};
     for (const product of REGISTRY) {
-      if (product.twitter) {
-        const data = await fetchXMetrics(product.twitter, xToken);
+      if (product.x) {
+        const data = await fetchXMetrics(product.x, xToken);
         results.social[product.id] = data;
         if (data && !data.error && supabase) {
           await supabase.from("pipeline_data").upsert({
