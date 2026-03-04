@@ -1,8 +1,9 @@
 // ============================================================
-// SCANNER API ROUTE v2
+// SCANNER API ROUTE v3
 // GET /api/scanner?secret=...&source=github  → cron-triggered scan
 // GET /api/scanner                           → public feed
-// 8 sources: github, pypi, huggingface, hackernews, npm, reddit, producthunt, arxiv
+// 11 sources: github, pypi, huggingface, hackernews, npm, reddit,
+//             producthunt, arxiv, github-trending, devto, lobsters
 // ============================================================
 
 import { createClient } from "@supabase/supabase-js";
@@ -14,6 +15,9 @@ import { scanNpm } from "@/lib/scanner/npm";
 import { scanReddit } from "@/lib/scanner/reddit";
 import { scanProductHunt } from "@/lib/scanner/producthunt";
 import { scanArxiv } from "@/lib/scanner/arxiv";
+import { scanGitHubTrending } from "@/lib/scanner/github-trending";
+import { scanDevTo } from "@/lib/scanner/devto";
+import { scanLobsters } from "@/lib/scanner/lobsters";
 
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -164,6 +168,42 @@ export async function GET(request) {
           items_found_total: (arxivState.items_found_total || 0) + discoveries.length,
         });
         results.arxiv = discoveries.length;
+      }
+
+      // ── GitHub Trending ──
+      if (scanSource === "all" || scanSource === "github-trending") {
+        const gtState = stateMap["github-trending"] || {};
+        const { discoveries, newLastScanAt } = await scanGitHubTrending(gtState.last_scan_at);
+        await batchUpsert(supabase, discoveries);
+        await updateState(supabase, "github-trending", {
+          last_scan_at: newLastScanAt,
+          items_found_total: (gtState.items_found_total || 0) + discoveries.length,
+        });
+        results["github-trending"] = discoveries.length;
+      }
+
+      // ── Dev.to ──
+      if (scanSource === "all" || scanSource === "devto") {
+        const devtoState = stateMap.devto || {};
+        const { discoveries, newLastScanAt } = await scanDevTo(devtoState.last_scan_at);
+        await batchUpsert(supabase, discoveries);
+        await updateState(supabase, "devto", {
+          last_scan_at: newLastScanAt,
+          items_found_total: (devtoState.items_found_total || 0) + discoveries.length,
+        });
+        results.devto = discoveries.length;
+      }
+
+      // ── Lobsters ──
+      if (scanSource === "all" || scanSource === "lobsters") {
+        const lState = stateMap.lobsters || {};
+        const { discoveries, newLastScanAt } = await scanLobsters(lState.last_scan_at);
+        await batchUpsert(supabase, discoveries);
+        await updateState(supabase, "lobsters", {
+          last_scan_at: newLastScanAt,
+          items_found_total: (lState.items_found_total || 0) + discoveries.length,
+        });
+        results.lobsters = discoveries.length;
       }
     } catch (err) {
       console.error(`[Scanner] Error in ${scanSource}: ${err.message}`);

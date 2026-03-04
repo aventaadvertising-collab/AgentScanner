@@ -31,6 +31,8 @@ function sourceLabel(url) {
   if (url.includes("reddit.com")) return "Thread";
   if (url.includes("producthunt.com")) return "Launch";
   if (url.includes("arxiv.org")) return "Paper";
+  if (url.includes("dev.to")) return "Article";
+  if (url.includes("lobste.rs")) return "Link";
   return "Source";
 }
 
@@ -180,7 +182,7 @@ export default function ScreenerClient() {
             { label: "Detected Today", value: stats.today, icon: "◈", color: "#3B82F6" },
             { label: "This Hour", value: stats.this_hour, icon: "⏱", color: "#10B981" },
             { label: "In Feed", value: filtered.length, icon: "◉", color: "#8B5CF6" },
-            { label: "Sources Active", value: sourceCount || 8, icon: "⊛", color: "#F59E0B" },
+            { label: "Sources Active", value: sourceCount || 11, icon: "⊛", color: "#F59E0B" },
           ].map((s, i) => (
             <div key={i} className="stat-card" style={{ animation: `fi .4s ease ${i * 0.06}s both` }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
@@ -246,7 +248,7 @@ export default function ScreenerClient() {
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <span style={{ fontSize: 10, color: "var(--t3)", fontFamily: "var(--m)", letterSpacing: ".06em" }}>AGENTSCREENER v1.0</span>
           <div style={{ width: 3, height: 3, borderRadius: "50%", background: "var(--t3)" }} />
-          <span style={{ fontSize: 10, color: "var(--t3)" }}>8 intelligence sources</span>
+          <span style={{ fontSize: 10, color: "var(--t3)" }}>11 intelligence sources</span>
         </div>
         <span style={{ fontSize: 10, color: "var(--t3)", fontStyle: "italic" }}>Real-time AI ecosystem intelligence</span>
       </footer>
@@ -303,10 +305,9 @@ function FeedCard({ item, index }) {
           </div>
         </div>
 
-        {/* Right: time + confidence % */}
+        {/* Right: time */}
         <div style={{ textAlign: "right", flexShrink: 0 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: isNew ? "#10B981" : "var(--t3)", fontFamily: "var(--m)", marginBottom: 4 }}>{age}</div>
-          <div style={{ fontSize: 10, fontWeight: 700, color: grade.color, fontFamily: "var(--m)" }}>{confidence}%</div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: isNew ? "#10B981" : "var(--t3)", fontFamily: "var(--m)" }}>{age}</div>
         </div>
       </div>
     </div>
@@ -337,7 +338,6 @@ function GridCard({ item, index }) {
         </div>
         <div style={{ textAlign: "right" }}>
           <div style={{ fontSize: 10, fontWeight: 600, color: "var(--t3)", fontFamily: "var(--m)" }}>{item.discovered_at ? timeAgo(item.discovered_at) : "—"}</div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: grade.color, fontFamily: "var(--m)", marginTop: 2 }}>{confidence}%</div>
         </div>
       </div>
 
@@ -397,7 +397,7 @@ function EmptyState() {
         Screening the AI ecosystem
       </div>
       <div style={{ fontSize: 14, color: "var(--t2)", lineHeight: 1.7, maxWidth: 460, margin: "0 auto 32px" }}>
-        Our intelligence engine monitors 8 sources across the internet for new AI products, agents, models, and tools. Discoveries appear here in real-time.
+        Our intelligence engine monitors 11 sources across the internet for new AI products, agents, models, and tools. Discoveries appear here in real-time.
       </div>
 
       <div style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "10px 20px", borderRadius: 12, background: "var(--s1)", border: "1px solid var(--b1)" }}>
