@@ -6,259 +6,98 @@ import UserMenu from "./auth/UserMenu";
 import AlertModal from "./auth/AlertModal";
 
 // ============================================================
-// DATA
+// DATA — Generated from the 155-product registry
+// Pipeline data replaces placeholders once fetched
 // ============================================================
-const PRODUCTS = [
-  {
-    id: "cursor", name: "Cursor", ticker: "CURSOR", category: "Dev Tools", logo: "⌨️",
-    description: "AI-first code editor built on VS Code with deep codebase understanding",
-    mrr: 4200000, mrrChange: 18.4,
-    mrrHist: [2100000, 2400000, 2700000, 2950000, 3200000, 3550000, 4200000],
-    mau: 890000, mauChange: 12.1, dau: 320000,
-    githubStars: 24500, starVelocity: 340,
-    teamSize: 85, teamGrowth: 12,
-    fundingTotal: 460000000, lastRound: "Series C", valuation: 2500000000,
-    investors: ["a16z", "Thrive Capital"],
-    uptime: 99.97, latencyMs: 120, errorRate: 0.03,
-    sentiment: 92, nps: 78,
-    verifications: { revenue: "stripe", usage: "posthog", community: "github", uptime: "betterstack", team: "linkedin" },
-    spark: [62, 58, 71, 68, 75, 82, 79, 88, 91, 95, 89, 102, 98, 110, 115, 108, 120, 125, 131, 128, 140, 145, 138, 152],
-    hot: true, age: "2y 3m", founded: "2022",
-    website: "https://cursor.com",
-    twitter: "https://x.com/cursor_ai",
-    contactEmail: "hello@cursor.com",
-    contactName: "Anysphere Team",
-  },
-  {
-    id: "bolt", name: "Bolt.new", ticker: "BOLT", category: "Dev Tools", logo: "⚡",
-    description: "Full-stack web apps from a single prompt, powered by StackBlitz",
-    mrr: 2800000, mrrChange: 34.2,
-    mrrHist: [400000, 620000, 880000, 1200000, 1600000, 2100000, 2800000],
-    mau: 520000, mauChange: 28.5, dau: 145000,
-    githubStars: 12800, starVelocity: 580,
-    teamSize: 42, teamGrowth: 28,
-    fundingTotal: 100000000, lastRound: "Series B", valuation: 750000000,
-    investors: ["Spark Capital"],
-    uptime: 99.82, latencyMs: 250, errorRate: 0.18,
-    sentiment: 88, nps: 72,
-    verifications: { revenue: "stripe", usage: "analytics", community: "github", uptime: "self", team: "self" },
-    spark: [20, 25, 28, 35, 42, 48, 55, 62, 58, 70, 78, 85, 92, 88, 100, 112, 120, 115, 130, 142, 150, 158, 165, 172],
-    hot: true, age: "1y 1m", founded: "2024",
-    website: "https://bolt.new",
-    twitter: "https://x.com/stackblitz",
-    contactEmail: "team@stackblitz.com",
-    contactName: "StackBlitz Team",
-  },
-  {
-    id: "perplexity", name: "Perplexity", ticker: "PPLX", category: "Search", logo: "🔍",
-    description: "AI-powered answer engine replacing traditional search",
-    mrr: 8500000, mrrChange: 8.7,
-    mrrHist: [4800000, 5200000, 5800000, 6400000, 7000000, 7800000, 8500000],
-    mau: 3200000, mauChange: 5.2, dau: 980000,
-    githubStars: null, starVelocity: null,
-    teamSize: 120, teamGrowth: 8,
-    fundingTotal: 500000000, lastRound: "Series C", valuation: 9000000000,
-    investors: ["IVP", "NEA", "Bezos Expeditions"],
-    uptime: 99.95, latencyMs: 180, errorRate: 0.05,
-    sentiment: 85, nps: 68,
-    verifications: { revenue: "stripe", usage: "cloudflare", community: "discord", uptime: "betterstack", team: "linkedin" },
-    spark: [80, 82, 85, 88, 90, 92, 88, 95, 98, 100, 102, 105, 98, 108, 110, 112, 115, 118, 120, 115, 122, 125, 128, 130],
-    hot: false, age: "2y 8m", founded: "2022",
-    website: "https://perplexity.ai",
-    twitter: "https://x.com/peraborplexity_ai",
-    contactEmail: "hello@perplexity.ai",
-    contactName: "Perplexity Team",
-  },
-  {
-    id: "devin", name: "Devin", ticker: "DEVIN", category: "AI Agent", logo: "🤖",
-    description: "Autonomous AI software engineer by Cognition Labs",
-    mrr: 1200000, mrrChange: -4.2,
-    mrrHist: [1400000, 1380000, 1350000, 1320000, 1280000, 1250000, 1200000],
-    mau: 45000, mauChange: -8.1, dau: 8500,
-    githubStars: null, starVelocity: null,
-    teamSize: 35, teamGrowth: -5,
-    fundingTotal: 175000000, lastRound: "Series A", valuation: 500000000,
-    investors: ["Founders Fund"],
-    uptime: 98.5, latencyMs: 3200, errorRate: 1.5,
-    sentiment: 52, nps: 22,
-    verifications: { revenue: "self", usage: "self", community: "discord", uptime: "self", team: "self" },
-    spark: [100, 105, 110, 108, 102, 98, 95, 92, 88, 85, 82, 80, 78, 75, 72, 70, 68, 72, 70, 65, 68, 65, 62, 60],
-    hot: false, age: "1y 6m", founded: "2023",
-    website: "https://devin.ai",
-    twitter: "https://x.com/cognaborition_ai",
-    contactEmail: "info@cognition.ai",
-    contactName: "Cognition Labs",
-  },
-  {
-    id: "lovable", name: "Lovable", ticker: "LOVE", category: "Dev Tools", logo: "💜",
-    description: "AI full-stack engineer — describe what you want, get a working app",
-    mrr: 1800000, mrrChange: 42.1,
-    mrrHist: [180000, 320000, 520000, 780000, 1050000, 1400000, 1800000],
-    mau: 310000, mauChange: 38.7, dau: 88000,
-    githubStars: 8200, starVelocity: 420,
-    teamSize: 28, teamGrowth: 35,
-    fundingTotal: 25000000, lastRound: "Series A", valuation: 200000000,
-    investors: ["Spark Capital"],
-    uptime: 99.88, latencyMs: 200, errorRate: 0.12,
-    sentiment: 90, nps: 76,
-    verifications: { revenue: "stripe", usage: "posthog", community: "github", uptime: "betterstack", team: "self" },
-    spark: [10, 12, 15, 18, 22, 28, 35, 42, 50, 58, 68, 75, 82, 90, 95, 102, 110, 118, 125, 135, 142, 155, 165, 178],
-    hot: true, age: "10m", founded: "2024",
-    website: "https://lovable.dev",
-    twitter: "https://x.com/lovaborable_dev",
-    contactEmail: "hello@lovable.dev",
-    contactName: "Lovable Team",
-  },
-  {
-    id: "windsurf", name: "Windsurf", ticker: "WIND", category: "Dev Tools", logo: "🏄",
-    description: "AI-powered IDE by Codeium with deep context awareness",
-    mrr: 950000, mrrChange: 22.8,
-    mrrHist: [320000, 420000, 510000, 600000, 700000, 820000, 950000],
-    mau: 180000, mauChange: 15.3, dau: 52000,
-    githubStars: 5400, starVelocity: 210,
-    teamSize: 55, teamGrowth: 10,
-    fundingTotal: 60000000, lastRound: "Series A", valuation: 300000000,
-    investors: ["Greenoaks Capital"],
-    uptime: 99.91, latencyMs: 140, errorRate: 0.09,
-    sentiment: 78, nps: 58,
-    verifications: { revenue: "self", usage: "analytics", community: "github", uptime: "betterstack", team: "linkedin" },
-    spark: [30, 32, 35, 38, 42, 45, 48, 52, 55, 58, 62, 60, 65, 68, 72, 75, 78, 82, 85, 80, 88, 92, 95, 98],
-    hot: false, age: "1y 2m", founded: "2023",
-    website: "https://windsurf.com",
-    twitter: "https://x.com/codeaborium",
-    contactEmail: "hello@codeium.com",
-    contactName: "Codeium Team",
-  },
-  {
-    id: "elevenlabs", name: "ElevenLabs", ticker: "11L", category: "Audio AI", logo: "🎙️",
-    description: "AI voice synthesis, cloning, and dubbing platform",
-    mrr: 6200000, mrrChange: 15.3,
-    mrrHist: [3200000, 3600000, 4100000, 4600000, 5200000, 5700000, 6200000],
-    mau: 1800000, mauChange: 9.8, dau: 420000,
-    githubStars: 3200, starVelocity: 85,
-    teamSize: 95, teamGrowth: 15,
-    fundingTotal: 180000000, lastRound: "Series C", valuation: 3300000000,
-    investors: ["a16z", "Nat Friedman"],
-    uptime: 99.93, latencyMs: 300, errorRate: 0.07,
-    sentiment: 87, nps: 70,
-    verifications: { revenue: "stripe", usage: "cloudflare", community: "discord", uptime: "betterstack", team: "linkedin" },
-    spark: [50, 52, 55, 58, 62, 65, 68, 72, 75, 78, 80, 82, 85, 88, 90, 92, 95, 98, 100, 102, 105, 108, 110, 115],
-    hot: false, age: "2y 5m", founded: "2022",
-    website: "https://elevenlabs.io",
-    twitter: "https://x.com/elevaborenlabs",
-    contactEmail: "hello@elevenlabs.io",
-    contactName: "ElevenLabs Team",
-  },
-  {
-    id: "replitAgent", name: "Replit Agent", ticker: "RPLIT", category: "AI Agent", logo: "🔄",
-    description: "Build complete apps with AI assistance inside Replit",
-    mrr: 3100000, mrrChange: 6.2,
-    mrrHist: [2400000, 2500000, 2600000, 2700000, 2800000, 2950000, 3100000],
-    mau: 420000, mauChange: 2.1, dau: 95000,
-    githubStars: 1800, starVelocity: 45,
-    teamSize: 180, teamGrowth: 3,
-    fundingTotal: 200000000, lastRound: "Series C", valuation: 1200000000,
-    investors: ["a16z"],
-    uptime: 99.75, latencyMs: 280, errorRate: 0.25,
-    sentiment: 71, nps: 45,
-    verifications: { revenue: "self", usage: "analytics", community: "github", uptime: "self", team: "linkedin" },
-    spark: [70, 72, 74, 75, 76, 78, 75, 77, 79, 80, 78, 80, 82, 81, 83, 82, 84, 83, 85, 84, 86, 85, 87, 88],
-    hot: false, age: "3y 1m", founded: "2016",
-    website: "https://replit.com",
-    twitter: "https://x.com/reaborplit",
-    contactEmail: "partnerships@replit.com",
-    contactName: "Replit Team",
-  },
-  {
-    id: "midjourney", name: "Midjourney", ticker: "MJ", category: "Image Gen", logo: "🎨",
-    description: "AI image generation via Discord and web interface",
-    mrr: 12000000, mrrChange: 2.1,
-    mrrHist: [10500000, 10800000, 11000000, 11200000, 11500000, 11800000, 12000000],
-    mau: 5200000, mauChange: -1.3, dau: 1200000,
-    githubStars: null, starVelocity: null,
-    teamSize: 55, teamGrowth: 5,
-    fundingTotal: 0, lastRound: "Bootstrapped", valuation: null,
-    investors: [],
-    uptime: 99.6, latencyMs: 8000, errorRate: 0.4,
-    sentiment: 76, nps: 55,
-    verifications: { revenue: "self", usage: "self", community: "discord", uptime: "self", team: "self" },
-    spark: [120, 122, 125, 128, 130, 128, 125, 122, 120, 118, 122, 125, 128, 125, 122, 120, 118, 120, 122, 124, 120, 122, 118, 120],
-    hot: false, age: "3y 2m", founded: "2021",
-    website: "https://midjourney.com",
-    twitter: "https://x.com/midaborjourney",
-    contactEmail: "support@midjourney.com",
-    contactName: "Midjourney Team",
-  },
-  {
-    id: "v0", name: "v0 by Vercel", ticker: "V0", category: "Dev Tools", logo: "▲",
-    description: "AI-powered UI generation and code scaffolding by Vercel",
-    mrr: 800000, mrrChange: 55.3,
-    mrrHist: [60000, 120000, 210000, 320000, 450000, 600000, 800000],
-    mau: 280000, mauChange: 44.2, dau: 72000,
-    githubStars: null, starVelocity: null,
-    teamSize: null, teamGrowth: null,
-    fundingTotal: null, lastRound: "Vercel Product", valuation: null,
-    investors: [],
-    uptime: 99.92, latencyMs: 160, errorRate: 0.08,
-    sentiment: 91, nps: 80,
-    verifications: { revenue: "self", usage: "cloudflare", community: "github", uptime: "betterstack", team: "self" },
-    spark: [5, 8, 12, 18, 25, 32, 40, 48, 55, 65, 72, 80, 88, 95, 105, 112, 120, 130, 138, 148, 155, 165, 175, 185],
-    hot: true, age: "1y 4m", founded: "2023",
-    website: "https://v0.dev",
-    twitter: "https://x.com/v0",
-    contactEmail: "sales@vercel.com",
-    contactName: "Vercel Team",
-  },
-  {
-    id: "heygen", name: "HeyGen", ticker: "HGEN", category: "Video AI", logo: "🎬",
-    description: "AI video generation, avatars, and localization platform",
-    mrr: 5800000, mrrChange: 21.5,
-    mrrHist: [2800000, 3200000, 3700000, 4200000, 4700000, 5200000, 5800000],
-    mau: 950000, mauChange: 18.2, dau: 180000,
-    githubStars: null, starVelocity: null,
-    teamSize: 150, teamGrowth: 20,
-    fundingTotal: 60000000, lastRound: "Series A", valuation: 500000000,
-    investors: ["Benchmark"],
-    uptime: 99.85, latencyMs: 5000, errorRate: 0.15,
-    sentiment: 82, nps: 65,
-    verifications: { revenue: "stripe", usage: "analytics", community: "discord", uptime: "betterstack", team: "linkedin" },
-    spark: [35, 40, 45, 50, 55, 60, 62, 68, 72, 75, 80, 85, 88, 92, 95, 100, 105, 108, 112, 118, 122, 128, 132, 138],
-    hot: true, age: "2y 10m", founded: "2022",
-    website: "https://heygen.com",
-    twitter: "https://x.com/HeyGen_Official",
-    contactEmail: "partnerships@heygen.com",
-    contactName: "HeyGen Team",
-  },
-  {
-    id: "claude-code", name: "Claude Code", ticker: "CLCD", category: "Dev Tools", logo: "🧠",
-    description: "Anthropic's agentic coding CLI for terminal-native developers",
-    mrr: null, mrrChange: null,
-    mrrHist: [],
-    mau: 150000, mauChange: 62.5, dau: 48000,
-    githubStars: null, starVelocity: null,
-    teamSize: null, teamGrowth: null,
-    fundingTotal: null, lastRound: "Anthropic Product", valuation: null,
-    investors: [],
-    uptime: 99.9, latencyMs: 200, errorRate: 0.1,
-    sentiment: 94, nps: 85,
-    verifications: { revenue: "self", usage: "self", community: "github", uptime: "self", team: "self" },
-    spark: [8, 12, 18, 28, 35, 45, 58, 68, 78, 85, 92, 98, 105, 115, 125, 132, 140, 148, 155, 162, 170, 178, 185, 195],
-    hot: true, age: "8m", founded: "2024",
-    website: "https://claude.ai",
-    twitter: "https://x.com/AnthropicAI",
-    contactEmail: "sales@anthropic.com",
-    contactName: "Anthropic",
-  },
-];
+import { REGISTRY, CATEGORIES } from "@/lib/pipeline/registry";
 
-const ALL_CATS = ["All", ...Array.from(new Set(PRODUCTS.map(p => p.category)))];
+// Category emoji map
+const CAT_EMOJI = {
+  "Code & Dev Tools": "⌨️", "AI Agents": "🤖", "Agent Frameworks": "🔧",
+  "Search & Research": "🔍", "Image Generation": "🎨", "Video Generation": "🎬",
+  "Audio & Voice": "🎙️", "Music Generation": "🎵", "Writing & Content": "✍️",
+  "Productivity & Workspace": "📋", "Foundation Models": "🧠", "Inference & Serving": "⚡",
+  "Model Hubs & Tooling": "🔗", "Open Source Models": "📦", "Crypto-AI": "💎",
+  "Voice Agents & Telephony": "📞", "Browser & Computer Use": "🖥️",
+  "Customer Support AI": "💬", "Sales & GTM AI": "📈", "Data & Analytics": "📊",
+  "Design & Creative": "🎯", "Legal AI": "⚖️", "Healthcare AI": "🏥",
+  "Finance AI": "💰", "Education AI": "🎓", "Robotics & Embodied AI": "🦾",
+  "3D & Spatial AI": "🌐", "AI Safety & Alignment": "🛡️",
+};
+
+// Generate a deterministic pseudo-random sparkline from product id
+function genSpark(id) {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = ((h << 5) - h + id.charCodeAt(i)) | 0;
+  const seed = Math.abs(h);
+  const pts = [];
+  let v = 40 + (seed % 60);
+  for (let i = 0; i < 24; i++) {
+    const d = ((seed * (i + 1) * 7) % 21) - 8;
+    v = Math.max(5, Math.min(200, v + d));
+    pts.push(Math.round(v));
+  }
+  return pts;
+}
+
+// Generate a ticker from name
+function genTicker(name) {
+  const clean = name.replace(/[^A-Za-z0-9 ]/g, "").toUpperCase();
+  const words = clean.split(/\s+/).filter(Boolean);
+  if (words.length === 1) return words[0].slice(0, 4);
+  return words.map(w => w[0]).join("").slice(0, 5);
+}
+
+// Convert registry entries to display format
+const PRODUCTS = REGISTRY.map(p => ({
+  id: p.id,
+  name: p.name,
+  ticker: genTicker(p.name),
+  category: p.cat,
+  logo: CAT_EMOJI[p.cat] || "◆",
+  description: (p.tags || []).join(" · ") || p.cat,
+  // Metrics — null until pipeline populates, or from Supabase
+  mrr: null, mrrChange: null,
+  mrrHist: [],
+  mau: null, mauChange: null, dau: null,
+  githubStars: null, starVelocity: null,
+  teamSize: null, teamGrowth: null,
+  fundingTotal: null, lastRound: null, valuation: null,
+  investors: [],
+  uptime: null, latencyMs: null, errorRate: null,
+  sentiment: null, nps: null,
+  verifications: {
+    revenue: "self",
+    usage: "self",
+    community: p.g ? "github" : p.d ? "discord" : "self",
+    uptime: "self",
+    team: p.cb ? "crunchbase" : "self",
+  },
+  spark: genSpark(p.id),
+  hot: false,
+  age: p.yr ? `${2026 - parseInt(p.yr)}y` : null,
+  founded: p.yr || null,
+  website: p.w || null,
+  twitter: p.x ? `https://x.com/${p.x}` : null,
+  contactEmail: p.em || null,
+  contactName: p.cn || null,
+  github: p.g || null,
+  discord: p.d || null,
+  crunchbase: p.cb || null,
+  linkedin: p.li || null,
+  tags: p.tags || [],
+  token: p.tk || null,
+  hq: p.hq || null,
+}));
+
+const ALL_CATS = ["All", ...CATEGORIES];
 const SORTS = [
-  { key: "mrrChange", label: "MRR Growth" },
+  { key: "githubStars", label: "GitHub Stars" },
+  { key: "name", label: "Name (A-Z)" },
+  { key: "fundingTotal", label: "Funding" },
+  { key: "sentiment", label: "Sentiment" },
   { key: "mrr", label: "Revenue" },
   { key: "mau", label: "Users" },
-  { key: "mauChange", label: "User Growth" },
-  { key: "sentiment", label: "Sentiment" },
-  { key: "fundingTotal", label: "Funding" },
 ];
 
 // ============================================================
@@ -407,8 +246,9 @@ function DetailPanel({ p, onClose, onAlert }) {
               <p style={{ fontSize: 12, color: "var(--t2)", margin: 0, lineHeight: 1.4, maxWidth: 400 }}>{p.description}</p>
               <div style={{ display: "flex", gap: 5, marginTop: 8, flexWrap: "wrap" }}>
                 <span className="chip">{p.category}</span>
-                {p.lastRound && <span className="chip chip-g">{p.lastRound}</span>}
-                <span className="chip">Est. {p.founded}</span>
+                {p.founded && <span className="chip">Est. {p.founded}</span>}
+                {p.hq && <span className="chip">{p.hq}</span>}
+                {(p.tags || []).slice(0, 4).map((t, i) => <span key={i} className="chip chip-g">{t}</span>)}
               </div>
             </div>
           </div>
@@ -418,13 +258,28 @@ function DetailPanel({ p, onClose, onAlert }) {
         <div style={{ padding: "20px 26px 26px" }}>
 
           {/* Links + Contact + Alert Row */}
-          <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
-            {p.website && <ExtLink href={p.website} style={{ padding: "6px 14px", borderRadius: 6, background: "var(--s2)", border: "1px solid var(--b1)", fontSize: 11, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 5 }}>
-              <span style={{ fontSize: 12 }}>↗</span> Website
+          <div style={{ display: "flex", gap: 6, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
+            {p.website && <ExtLink href={p.website} style={{ padding: "5px 12px", borderRadius: 6, background: "var(--s2)", border: "1px solid var(--b1)", fontSize: 10, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4 }}>
+              <span style={{ fontSize: 11 }}>↗</span> Website
             </ExtLink>}
-            {p.twitter && <ExtLink href={p.twitter} style={{ padding: "6px 14px", borderRadius: 6, background: "var(--s2)", border: "1px solid var(--b1)", fontSize: 11, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 5, color: "var(--t2)" }}>
+            {p.twitter && <ExtLink href={p.twitter} style={{ padding: "5px 12px", borderRadius: 6, background: "var(--s2)", border: "1px solid var(--b1)", fontSize: 10, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4, color: "var(--t2)" }}>
               𝕏 Profile
             </ExtLink>}
+            {p.github && <ExtLink href={`https://github.com/${p.github.o}/${p.github.r}`} style={{ padding: "5px 12px", borderRadius: 6, background: "var(--s2)", border: "1px solid var(--b1)", fontSize: 10, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4, color: "var(--t2)" }}>
+              GitHub
+            </ExtLink>}
+            {p.discord && <ExtLink href={`https://discord.gg/${p.discord}`} style={{ padding: "5px 12px", borderRadius: 6, background: "var(--s2)", border: "1px solid var(--b1)", fontSize: 10, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4, color: "var(--t2)" }}>
+              Discord
+            </ExtLink>}
+            {p.crunchbase && <ExtLink href={`https://crunchbase.com/organization/${p.crunchbase}`} style={{ padding: "5px 12px", borderRadius: 6, background: "var(--s2)", border: "1px solid var(--b1)", fontSize: 10, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4, color: "var(--t2)" }}>
+              Crunchbase
+            </ExtLink>}
+            {p.linkedin && <ExtLink href={`https://linkedin.com/company/${p.linkedin}`} style={{ padding: "5px 12px", borderRadius: 6, background: "var(--s2)", border: "1px solid var(--b1)", fontSize: 10, fontWeight: 600, display: "inline-flex", alignItems: "center", gap: 4, color: "var(--t2)" }}>
+              LinkedIn
+            </ExtLink>}
+            {p.token && <span style={{ padding: "5px 12px", borderRadius: 6, background: "rgba(217,119,6,.06)", border: "1px solid rgba(217,119,6,.15)", fontSize: 10, fontWeight: 700, color: "var(--y)", display: "inline-flex", alignItems: "center", gap: 4 }}>
+              ${p.token.symbol} • {p.token.chain}
+            </span>}
             <button onClick={(e) => { e.stopPropagation(); if (onAlert) onAlert(e, p); }} style={{ padding: "6px 14px", borderRadius: 6, background: "var(--s2)", border: "1px solid var(--b1)", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "var(--f)", color: "var(--t2)", display: "inline-flex", alignItems: "center", gap: 5, transition: "all .12s" }}
               onMouseEnter={e => { e.currentTarget.style.background = "rgba(37,99,235,.05)"; e.currentTarget.style.color = "var(--g)"; }}
               onMouseLeave={e => { e.currentTarget.style.background = "var(--s2)"; e.currentTarget.style.color = "var(--t2)"; }}
@@ -507,7 +362,7 @@ function ApplyModal({ onClose }) {
   const [done, setDone] = useState(false);
   const u = (k, v) => setF(p => ({ ...p, [k]: v }));
 
-  const CATS = ["Dev Tools", "AI Agent", "Search", "Audio AI", "Image Gen", "Video AI", "Productivity", "Data/Analytics", "Infrastructure", "Other"];
+  const CATS = CATEGORIES;
 
   const Inp = ({ label, field, ph, type = "text", half }) => (
     <div style={{ flex: half ? "1 1 48%" : "1 1 100%" }}>
@@ -641,7 +496,7 @@ export default function AgentScreener() {
   const user = auth?.user;
   const supabase = auth?.supabase;
   const [cat, setCat] = useState("All");
-  const [sort, setSort] = useState("mrrChange");
+  const [sort, setSort] = useState("name");
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(null);
   const [apply, setApply] = useState(false);
@@ -650,6 +505,15 @@ export default function AgentScreener() {
   const [view, setView] = useState("table");
   const [authModal, setAuthModal] = useState(null); // "signin" | "signup" | null
   const [alertProduct, setAlertProduct] = useState(null);
+  const [pipelineData, setPipelineData] = useState({});
+
+  // Fetch pipeline data on mount
+  useEffect(() => {
+    fetch("/api/data")
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { if (d?.products) setPipelineData(d.products); })
+      .catch(() => {});
+  }, []);
 
   // Load watchlist from Supabase when user logs in
   useEffect(() => {
@@ -684,23 +548,72 @@ export default function AgentScreener() {
     setAlertProduct(product);
   }, [user]);
 
+  // Enrich products with pipeline data
+  const enriched = useMemo(() => {
+    return PRODUCTS.map(p => {
+      const pd = pipelineData[p.id];
+      if (!pd) return p;
+      const gh = pd.github;
+      const fund = pd.funding;
+      const traffic = pd.traffic;
+      const social = pd.social;
+      const uptime = pd.uptime;
+      const jobs = pd.jobs;
+      return {
+        ...p,
+        githubStars: gh?.stars ?? p.githubStars,
+        starVelocity: gh?.star_velocity_per_week ?? p.starVelocity,
+        fundingTotal: fund?.total ?? p.fundingTotal,
+        lastRound: fund?.last_round ?? p.lastRound,
+        valuation: fund?.valuation ?? p.valuation,
+        investors: fund?.investors ?? p.investors,
+        uptime: uptime?.uptime_pct ?? p.uptime,
+        latencyMs: uptime?.latency_ms ?? p.latencyMs,
+        estimatedTraffic: traffic?.estimate?.monthly_visits ?? null,
+        trafficRank: traffic?.rank?.rank ?? null,
+        xFollowers: social?.followers_count ?? null,
+        teamSize: jobs?.total_openings ? `${jobs.total_openings} open roles` : p.teamSize,
+        verifications: {
+          ...p.verifications,
+          community: gh ? "github" : p.verifications.community,
+          uptime: uptime ? "betterstack" : p.verifications.uptime,
+          team: fund ? "crunchbase" : p.verifications.team,
+        },
+      };
+    });
+  }, [pipelineData]);
+
   const filtered = useMemo(() => {
-    return PRODUCTS
+    return enriched
       .filter(p => !wlFilter || wl.has(p.id))
       .filter(p => cat === "All" || p.category === cat)
       .filter(p => { const s = q.toLowerCase(); return !s || p.name.toLowerCase().includes(s) || p.ticker.toLowerCase().includes(s) || p.category.toLowerCase().includes(s); })
-      .sort((a, b) => (b[sort] ?? -Infinity) - (a[sort] ?? -Infinity));
-  }, [cat, sort, q, wlFilter, wl]);
+      .sort((a, b) => {
+        if (sort === "name") return a.name.localeCompare(b.name);
+        return (b[sort] ?? -Infinity) - (a[sort] ?? -Infinity);
+      });
+  }, [enriched, cat, sort, q, wlFilter, wl]);
 
-  const movers = useMemo(() => [...PRODUCTS].sort((a, b) => (b.mrrChange || 0) - (a.mrrChange || 0)).slice(0, 5), []);
+  // Top movers: products with most GitHub stars (or newest if no pipeline data)
+  const movers = useMemo(() => {
+    const withStars = enriched.filter(p => p.githubStars > 0);
+    if (withStars.length >= 6) {
+      return [...withStars].sort((a, b) => (b.starVelocity || 0) - (a.starVelocity || 0)).slice(0, 6);
+    }
+    return [...enriched].filter(p => p.founded).sort((a, b) => (parseInt(b.founded) || 0) - (parseInt(a.founded) || 0)).slice(0, 6);
+  }, [enriched]);
+
+  const hasPipelineData = Object.keys(pipelineData).length > 0;
 
   const agg = useMemo(() => ({
-    mrr: PRODUCTS.reduce((s, p) => s + (p.mrr || 0), 0),
-    users: PRODUCTS.reduce((s, p) => s + (p.mau || 0), 0),
-    senti: Math.round(PRODUCTS.reduce((s, p) => s + (p.sentiment || 0), 0) / PRODUCTS.length),
-    veri: PRODUCTS.filter(p => vCount(p.verifications) >= 3).length,
-    n: PRODUCTS.length,
-  }), []);
+    n: enriched.length,
+    gh: enriched.filter(p => p.github).length,
+    cats: ALL_CATS.length - 1,
+    tokens: enriched.filter(p => p.token).length,
+    withSite: enriched.filter(p => p.website).length,
+    totalStars: enriched.reduce((s, p) => s + (p.githubStars || 0), 0),
+    funded: enriched.filter(p => p.fundingTotal > 0).length,
+  }), [enriched]);
 
   return (
     <div id="app" style={{ "--bg": "#F4F5F7", "--s1": "#FFFFFF", "--s2": "rgba(0,0,0,.02)", "--sh": "rgba(0,0,0,.04)", "--b1": "rgba(0,0,0,.06)", "--b2": "rgba(0,0,0,.1)", "--t1": "#0F1218", "--t2": "rgba(15,18,24,.6)", "--t3": "rgba(15,18,24,.35)", "--t4": "rgba(15,18,24,.12)", "--g": "#2563EB", "--gg": "rgba(37,99,235,.25)", "--gd": "rgba(37,99,235,.06)", "--r": "#DC2626", "--y": "#D97706", "--up": "#16A34A", "--dn": "#DC2626", "--m": "'JetBrains Mono', 'SF Mono', 'Consolas', monospace", "--f": "'Helvetica Neue', Helvetica, Arial, sans-serif", minHeight: "100vh", background: "var(--bg)", color: "var(--t1)", fontFamily: "var(--f)" }}>
@@ -777,7 +690,7 @@ export default function AgentScreener() {
 
       {/* STATS BAR */}
       <div style={{ padding: "10px 24px", display: "flex", gap: 24, borderBottom: "1px solid var(--b1)", background: "rgba(0,0,0,.008)" }}>
-        {[["Tracked", agg.n], ["Combined MRR", fmt$(agg.mrr)], ["Total Users", fmtU(agg.users)], ["Avg Sentiment", agg.senti], ["Verified", `${agg.veri}/${agg.n}`]].map(([l, v], i) => (
+        {[["Products", agg.n], ["Categories", agg.cats], ["Open Source", agg.gh], ...(hasPipelineData ? [["Total Stars", fmtU(agg.totalStars)], ["Funded", agg.funded]] : [["Crypto-AI", agg.tokens], ["With Site", agg.withSite]])].map(([l, v], i) => (
           <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--t3)" }}>{l}</span>
             <span style={{ fontSize: 12, fontWeight: 700, fontFamily: "var(--m)", color: "var(--t1)" }}>{v}</span>
@@ -789,7 +702,7 @@ export default function AgentScreener() {
 
         {/* TOP MOVERS */}
         <div style={{ marginBottom: 20 }}>
-          <span className="label-xs" style={{ marginBottom: 8, display: "block" }}>Top Movers</span>
+          <span className="label-xs" style={{ marginBottom: 8, display: "block" }}>{hasPipelineData ? "Trending (Star Velocity)" : "Newest Products"}</span>
           <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
             {movers.map((p, i) => (
               <div key={p.id} className="mover" onClick={() => setSel(p)} style={{ animation: `su .25s ease ${i * .04}s both` }}>
@@ -801,7 +714,7 @@ export default function AgentScreener() {
                       <div style={{ fontSize: 9, color: "var(--t3)", fontFamily: "var(--m)" }}>${p.ticker}</div>
                     </div>
                   </div>
-                  <span style={{ fontSize: 13, fontWeight: 800, fontFamily: "var(--m)", color: (p.mrrChange || 0) >= 0 ? "var(--up)" : "var(--dn)" }}>{fmtP(p.mrrChange)}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: "var(--g)" }}>{p.githubStars ? fmtU(p.githubStars) + " ★" : p.founded || "—"}</span>
                 </div>
                 <Spark data={p.spark} up={(p.mrrChange || 0) >= 0} w={155} h={24} />
               </div>
@@ -811,8 +724,8 @@ export default function AgentScreener() {
 
         {/* CONTROLS */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
-          <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
-            {ALL_CATS.map(c => <button key={c} className={`cat-btn${cat === c ? " on" : ""}`} onClick={() => setCat(c)}>{c}</button>)}
+          <div style={{ display: "flex", gap: 3, alignItems: "center", overflowX: "auto", flexShrink: 1, maxWidth: "70%", paddingBottom: 2 }}>
+            {ALL_CATS.map(c => <button key={c} className={`cat-btn${cat === c ? " on" : ""}`} onClick={() => setCat(c)} style={{ whiteSpace: "nowrap", flexShrink: 0 }}>{c}</button>)}
             <div style={{ width: 1, height: 18, background: "var(--b1)", margin: "0 4px" }} />
             <button className={`cat-btn${wlFilter ? " on" : ""}`} onClick={() => setWlFilter(!wlFilter)} style={wlFilter ? { borderColor: "rgba(217,119,6,.25)", background: "rgba(217,119,6,.06)", color: "var(--y)" } : {}}>
               ★ Watchlist{wl.size > 0 ? ` (${wl.size})` : ""}
@@ -831,7 +744,7 @@ export default function AgentScreener() {
         {/* TABLE */}
         {view === "table" && <>
           <div className="row-h" style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--t3)" }}>
-            <span>#</span><span>Product</span><span style={{ textAlign: "right" }}>MRR</span><span style={{ textAlign: "right" }}>Users</span><span style={{ textAlign: "right" }}>Funding</span><span style={{ textAlign: "right" }}>Sentiment</span><span style={{ textAlign: "center" }}>Verified</span><span style={{ textAlign: "right" }}>30d</span><span></span>
+            <span>#</span><span>Product</span><span style={{ textAlign: "right" }}>GitHub</span><span style={{ textAlign: "right" }}>Founded</span><span style={{ textAlign: "right" }}>HQ</span><span style={{ textAlign: "right" }}>Links</span><span style={{ textAlign: "center" }}>Sources</span><span style={{ textAlign: "right" }}>30d</span><span></span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
             {filtered.map((p, i) => (
@@ -852,20 +765,23 @@ export default function AgentScreener() {
                   </div>
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, fontFamily: "var(--m)" }}>{fmt$(p.mrr)}</div>
-                  <div style={{ fontSize: 9.5, fontWeight: 600, fontFamily: "var(--m)", color: p.mrrChange == null ? "var(--t3)" : p.mrrChange >= 0 ? "var(--up)" : "var(--dn)" }}>{p.mrrChange != null ? fmtP(p.mrrChange) : "—"}</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, fontFamily: "var(--m)" }}>{p.githubStars ? fmtU(p.githubStars) + " ★" : p.github ? "✓" : "—"}</div>
+                  <div style={{ fontSize: 9, color: p.github ? "var(--up)" : "var(--t4)" }}>{p.starVelocity ? `+${p.starVelocity}/wk` : p.github ? `${p.github.o}/${p.github.r}`.slice(0, 18) : "closed"}</div>
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, fontFamily: "var(--m)" }}>{fmtU(p.mau)}</div>
-                  <div style={{ fontSize: 9.5, fontWeight: 600, fontFamily: "var(--m)", color: p.mauChange >= 0 ? "var(--up)" : "var(--dn)" }}>{fmtP(p.mauChange)}</div>
+                  <div style={{ fontSize: 12, fontWeight: 700, fontFamily: "var(--m)" }}>{p.founded || "—"}</div>
+                  <div style={{ fontSize: 9, color: "var(--t3)" }}>{p.age || ""}</div>
                 </div>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 11, fontWeight: 600, fontFamily: "var(--m)", color: "var(--t2)" }}>{p.fundingTotal ? fmt$(p.fundingTotal) : p.lastRound || "—"}</div>
-                  <div style={{ fontSize: 8.5, color: "var(--t3)" }}>{p.lastRound}</div>
+                  <div style={{ fontSize: 11, fontWeight: 500, color: "var(--t2)" }}>{p.hq || "—"}</div>
                 </div>
-                <div style={{ display: "flex", justifyContent: "flex-end" }}><SentiBar s={p.sentiment} /></div>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 4 }}>
+                  {p.website && <a href={p.website} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 10, color: "var(--g)", textDecoration: "none", padding: "2px 5px", borderRadius: 3, background: "var(--gd)" }}>↗</a>}
+                  {p.twitter && <a href={p.twitter} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 10, color: "var(--t2)", textDecoration: "none", padding: "2px 5px", borderRadius: 3, background: "var(--s2)" }}>𝕏</a>}
+                  {p.token && <span style={{ fontSize: 8, padding: "2px 5px", borderRadius: 3, background: "rgba(217,119,6,.06)", color: "var(--y)", fontWeight: 700 }}>${p.token.symbol}</span>}
+                </div>
                 <div style={{ display: "flex", justifyContent: "center" }}><VMeter v={p.verifications} /></div>
-                <div style={{ display: "flex", justifyContent: "flex-end" }}><Spark data={p.spark} up={p.mrrChange == null || p.mrrChange >= 0} w={90} h={24} /></div>
+                <div style={{ display: "flex", justifyContent: "flex-end" }}><Spark data={p.spark} up={true} w={90} h={24} /></div>
                 <button className="wl-star" onClick={e => toggleWl(e, p.id)} style={{ color: wl.has(p.id) ? "var(--y)" : "var(--t3)", filter: wl.has(p.id) ? "drop-shadow(0 0 3px rgba(217,119,6,.3))" : "none" }}>{wl.has(p.id) ? "★" : "☆"}</button>
               </div>
             ))}
@@ -893,21 +809,16 @@ export default function AgentScreener() {
                   </div>
                   <button className="wl-star" onClick={e => toggleWl(e, p.id)} style={{ color: wl.has(p.id) ? "var(--y)" : "var(--t3)" }}>{wl.has(p.id) ? "★" : "☆"}</button>
                 </div>
-                <div style={{ marginBottom: 12 }}><Spark data={p.spark} up={p.mrrChange == null || p.mrrChange >= 0} w={230} h={32} /></div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 10 }}>
-                  <div>
-                    <div className="label-xs" style={{ marginBottom: 2 }}>MRR</div>
-                    <span style={{ fontSize: 14, fontWeight: 700, fontFamily: "var(--m)" }}>{fmt$(p.mrr)}</span>
-                    {p.mrrChange != null && <span style={{ fontSize: 9, fontWeight: 600, fontFamily: "var(--m)", color: p.mrrChange >= 0 ? "var(--up)" : "var(--dn)", marginLeft: 4 }}>{fmtP(p.mrrChange)}</span>}
-                  </div>
-                  <div>
-                    <div className="label-xs" style={{ marginBottom: 2 }}>Users</div>
-                    <span style={{ fontSize: 14, fontWeight: 700, fontFamily: "var(--m)" }}>{fmtU(p.mau)}</span>
-                    <span style={{ fontSize: 9, fontWeight: 600, fontFamily: "var(--m)", color: p.mauChange >= 0 ? "var(--up)" : "var(--dn)", marginLeft: 4 }}>{fmtP(p.mauChange)}</span>
-                  </div>
+                <div style={{ marginBottom: 12 }}><Spark data={p.spark} up={true} w={230} h={32} /></div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 3, marginBottom: 10 }}>
+                  {(p.tags || []).slice(0, 4).map((t, j) => <span key={j} style={{ fontSize: 8, padding: "2px 6px", borderRadius: 3, background: "var(--s2)", color: "var(--t3)", border: "1px solid var(--b1)" }}>{t}</span>)}
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <SentiBar s={p.sentiment} />
+                  <div style={{ display: "flex", gap: 4 }}>
+                    {p.website && <a href={p.website} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 9, color: "var(--g)", textDecoration: "none", padding: "2px 6px", borderRadius: 3, background: "var(--gd)" }}>↗ Site</a>}
+                    {p.github && <span style={{ fontSize: 9, color: "var(--up)", padding: "2px 6px", borderRadius: 3, background: "rgba(22,163,74,.06)" }}>GitHub</span>}
+                    {p.token && <span style={{ fontSize: 8, padding: "2px 6px", borderRadius: 3, background: "rgba(217,119,6,.06)", color: "var(--y)", fontWeight: 700 }}>${p.token.symbol}</span>}
+                  </div>
                   <VMeter v={p.verifications} />
                 </div>
               </div>
@@ -935,7 +846,7 @@ export default function AgentScreener() {
         </div>
       </div>
 
-      {sel && <DetailPanel p={sel} onClose={() => setSel(null)} onAlert={openAlert} />}
+      {sel && <DetailPanel p={enriched.find(e => e.id === sel.id) || sel} onClose={() => setSel(null)} onAlert={openAlert} />}
       {apply && <ApplyModal onClose={() => setApply(false)} />}
       {authModal && <AuthModal onClose={() => setAuthModal(null)} initialMode={authModal} />}
       {alertProduct && <AlertModal product={alertProduct} onClose={() => setAlertProduct(null)} />}

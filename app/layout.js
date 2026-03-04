@@ -1,11 +1,17 @@
 import { AuthProvider } from "@/lib/AuthContext";
 
 export const metadata = {
-  title: "AgentScreener — AI Product Intelligence",
-  description: "Real-time metrics, verified data, and intelligence on every AI product and agent.",
+  title: "AgentScreener — The Intelligence Layer for AI Products",
+  description: "Real-time metrics, funding data, GitHub activity, and traction signals on 155+ AI startups, agents, and tools. The terminal VCs and builders use.",
   openGraph: {
     title: "AgentScreener",
-    description: "Real-time intelligence on AI products and agents. Verified metrics.",
+    description: "Track the entire AI ecosystem. Real-time metrics on 155+ products across 28 categories.",
+    siteName: "AgentScreener",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "AgentScreener — AI Product Intelligence",
+    description: "Real-time metrics, funding data, and traction signals on every AI product getting traction.",
   },
 };
 

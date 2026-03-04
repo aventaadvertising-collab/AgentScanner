@@ -1,5 +1,27 @@
 {
   "framework": "nextjs",
   "buildCommand": "next build",
-  "outputDirectory": ".next"
+  "outputDirectory": ".next",
+  "crons": [
+    {
+      "path": "/api/pipeline?source=github&secret=${PIPELINE_SECRET}",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/pipeline?source=uptime&secret=${PIPELINE_SECRET}",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/pipeline?source=traffic&secret=${PIPELINE_SECRET}",
+      "schedule": "0 0 * * *"
+    },
+    {
+      "path": "/api/pipeline?source=jobs&secret=${PIPELINE_SECRET}",
+      "schedule": "0 0 * * 1"
+    },
+    {
+      "path": "/api/pipeline?source=social&secret=${PIPELINE_SECRET}",
+      "schedule": "0 */12 * * *"
+    }
+  ]
 }
