@@ -365,7 +365,7 @@ export default function AgentScreener() {
   }), [enriched]);
 
   return (
-    <div id="app" style={{ "--bg": "#07080C", "--s1": "#0D0F15", "--s2": "rgba(255,255,255,.02)", "--sh": "rgba(255,255,255,.04)", "--b1": "rgba(255,255,255,.06)", "--b2": "rgba(255,255,255,.1)", "--t1": "#EEEEF3", "--t2": "rgba(238,238,243,.55)", "--t3": "rgba(238,238,243,.3)", "--t4": "rgba(238,238,243,.12)", "--g": "#3B82F6", "--gg": "rgba(59,130,246,.2)", "--gd": "rgba(59,130,246,.06)", "--r": "#EF4444", "--y": "#F59E0B", "--up": "#10B981", "--dn": "#EF4444", "--m": "'SF Mono', 'JetBrains Mono', 'Fira Code', monospace", "--f": "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif", minHeight: "100vh", background: "var(--bg)", color: "var(--t1)", fontFamily: "var(--f)" }}>
+    <div id="app" style={{ "--bg": "#0C0D12", "--s1": "#13151D", "--s2": "rgba(255,255,255,.03)", "--sh": "rgba(255,255,255,.05)", "--b1": "rgba(255,255,255,.08)", "--b2": "rgba(255,255,255,.12)", "--t1": "#F2F2F7", "--t2": "rgba(242,242,247,.65)", "--t3": "rgba(242,242,247,.38)", "--t4": "rgba(242,242,247,.15)", "--g": "#3B82F6", "--gg": "rgba(59,130,246,.2)", "--gd": "rgba(59,130,246,.08)", "--r": "#EF4444", "--y": "#F59E0B", "--up": "#10B981", "--dn": "#EF4444", "--m": "'SF Mono', 'JetBrains Mono', 'Fira Code', monospace", "--f": "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif", minHeight: "100vh", background: "var(--bg)", color: "var(--t1)", fontFamily: "var(--f)" }}>
 
       <style suppressHydrationWarning>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
@@ -408,7 +408,7 @@ export default function AgentScreener() {
       `}</style>
 
       {/* HEADER */}
-      <header style={{ padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--b1)", position: "sticky", top: 0, background: "rgba(7,8,12,.85)", backdropFilter: "blur(24px) saturate(180%)", zIndex: 100 }}>
+      <header style={{ padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--b1)", position: "sticky", top: 0, background: "rgba(12,13,18,.88)", backdropFilter: "blur(24px) saturate(180%)", zIndex: 100 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ width: 30, height: 30, borderRadius: 8, position: "relative", overflow: "hidden", background: "linear-gradient(135deg, #3B82F6, #2563EB, #1D4ED8)", display: "flex", alignItems: "center", justifyContent: "center", animation: "glow-pulse 4s ease-in-out infinite" }}>
             <span style={{ fontSize: 11, fontWeight: 800, color: "#FFF", fontFamily: "var(--m)", letterSpacing: ".02em" }}>AS</span>
