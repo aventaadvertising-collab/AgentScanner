@@ -241,6 +241,58 @@ export async function GET(request) {
     });
   }
 
+  // ─── TRIGGER MODE: client-initiated scan (no secret needed, rate-limited) ───
+  const trigger = searchParams.get("trigger");
+  if (trigger) {
+    const supabase = getSupabaseAdmin();
+    if (!supabase) {
+      return Response.json({ triggered: false, reason: "db" });
+    }
+
+    // Check staleness — only scan if last scan was > 2 minutes ago
+    const { data: latestState } = await supabase
+      .from("scanner_state")
+      .select("last_scan_at")
+      .order("last_scan_at", { ascending: false })
+      .limit(1);
+
+    const lastScan = latestState?.[0]?.last_scan_at;
+    const staleMins = lastScan
+      ? (Date.now() - new Date(lastScan).getTime()) / 60000
+      : 999;
+
+    if (staleMins < 2) {
+      return Response.json({ triggered: false, reason: "fresh", last_scan_mins_ago: Math.round(staleMins * 10) / 10 });
+    }
+
+    // Stale — pick which batch to run (rotate based on minute)
+    const minute = new Date().getMinutes();
+    const batchKey = ["batch1", "batch2", "batch3"][minute % 3];
+    const sourcesToScan = BATCHES[batchKey];
+
+    const { data: states } = await supabase.from("scanner_state").select("*");
+    const stateMap = Object.fromEntries((states || []).map((s) => [s.source, s]));
+
+    const scanResults = await Promise.allSettled(
+      sourcesToScan.map((s) => runSource(s, stateMap, supabase))
+    );
+
+    const results = {};
+    for (const r of scanResults) {
+      if (r.status === "fulfilled") results[r.value.source] = r.value.count;
+    }
+    const total = Object.values(results).reduce((a, b) => a + b, 0);
+    console.log(`[Scanner:trigger] ${batchKey}: ${total} products`);
+
+    return Response.json({
+      triggered: true,
+      batch: batchKey,
+      results,
+      total,
+      timestamp: new Date().toISOString(),
+    });
+  }
+
   // ─── FEED MODE: no secret → return discoveries ───
   const supabase = getSupabaseAdmin();
   if (!supabase) {

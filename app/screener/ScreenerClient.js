@@ -82,6 +82,17 @@ export default function ScreenerClient() {
 
   useEffect(() => { fetchFeed(); const i = setInterval(fetchFeed, 15_000); return () => clearInterval(i); }, [fetchFeed]);
 
+  // ── Self-healing: trigger scans from client to keep data fresh ──
+  useEffect(() => {
+    const triggerScan = () => {
+      fetch("/api/scanner?trigger=1").catch(() => {});
+    };
+    // Trigger immediately on mount, then every 60s
+    triggerScan();
+    const i = setInterval(triggerScan, 60_000);
+    return () => clearInterval(i);
+  }, []);
+
   useEffect(() => {
     if (!supabase) return;
     const ch = supabase.channel("scanner-realtime")
