@@ -57,9 +57,21 @@ export default function ScreenerClient() {
   const supabase = useMemo(() => getSupabase(), []);
 
   const fetchFeed = useCallback(() => {
-    return fetch("/api/scanner?limit=150")
+    return fetch("/api/scanner?limit=300")
       .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (d?.discoveries) { setDiscoveries(d.discoveries); setStats(d.stats); } })
+      .then((d) => {
+        if (d?.discoveries) {
+          // Merge by ID — preserves realtime inserts between polls
+          setDiscoveries((prev) => {
+            const byId = new Map(prev.map((item) => [item.id || item.external_id, item]));
+            for (const item of d.discoveries) byId.set(item.id || item.external_id, item);
+            return [...byId.values()]
+              .sort((a, b) => new Date(b.discovered_at) - new Date(a.discovered_at))
+              .slice(0, 300);
+          });
+          setStats(d.stats);
+        }
+      })
       .catch(() => {});
   }, []);
 
@@ -74,8 +86,19 @@ export default function ScreenerClient() {
     if (!supabase) return;
     const ch = supabase.channel("scanner-realtime")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "scanner_discoveries" },
-        (p) => { setDiscoveries((prev) => [p.new, ...prev].slice(0, 200)); setStats((prev) => ({ today: prev.today + 1, this_hour: prev.this_hour + 1 })); })
-      .subscribe();
+        (p) => {
+          setDiscoveries((prev) => {
+            // Dedupe — don't add if we already have this item
+            const id = p.new.id || p.new.external_id;
+            if (prev.some((d) => (d.id || d.external_id) === id)) return prev;
+            return [p.new, ...prev].slice(0, 300);
+          });
+          setStats((prev) => ({ today: prev.today + 1, this_hour: prev.this_hour + 1 }));
+        })
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") console.log("[Screener] Realtime connected");
+        if (status === "CHANNEL_ERROR") console.warn("[Screener] Realtime channel error");
+      });
     return () => supabase.removeChannel(ch);
   }, [supabase]);
 

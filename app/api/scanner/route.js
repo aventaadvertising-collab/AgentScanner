@@ -1,5 +1,5 @@
 // ============================================================
-// SCANNER API ROUTE v4 — BATCH PARALLEL SCANNING
+// SCANNER API ROUTE v5 — BATCH PARALLEL + PRODUCT FILTER
 // GET /api/scanner?secret=...&source=batch1  → cron-triggered scan
 // GET /api/scanner                           → public feed
 //
@@ -23,6 +23,7 @@ import { scanArxiv } from "@/lib/scanner/arxiv";
 import { scanGitHubTrending } from "@/lib/scanner/github-trending";
 import { scanDevTo } from "@/lib/scanner/devto";
 import { scanLobsters } from "@/lib/scanner/lobsters";
+import { validateProduct } from "@/lib/scanner/product-filter";
 
 // ── Batch definitions ──
 const BATCHES = {
@@ -51,6 +52,31 @@ async function updateState(supabase, source, updates) {
     { source, ...updates },
     { onConflict: "source" }
   );
+}
+
+// ── Product filter: validate + boost confidence ──
+function filterProducts(discoveries) {
+  const products = [];
+  let rejected = 0;
+
+  for (const d of discoveries) {
+    const { isProduct, reason, confidenceBoost } = validateProduct(d);
+    if (!isProduct) {
+      rejected++;
+      continue;
+    }
+    // Apply confidence boost from product signals
+    if (confidenceBoost > 0) {
+      d.ai_confidence = Math.min((d.ai_confidence || 0) + confidenceBoost, 1);
+    }
+    products.push(d);
+  }
+
+  if (rejected > 0) {
+    console.log(`[Scanner] Product filter: ${products.length} products, ${rejected} content items rejected`);
+  }
+
+  return products;
 }
 
 // ── Individual source scanner ──
@@ -129,6 +155,10 @@ async function runSource(sourceName, stateMap, supabase) {
       }
     }
 
+    // Apply product filter — reject blog posts, discussions, non-products
+    const rawCount = discoveries.length;
+    discoveries = filterProducts(discoveries);
+
     // Persist results
     await batchUpsert(supabase, discoveries);
     await updateState(supabase, sourceName, {
@@ -136,14 +166,15 @@ async function runSource(sourceName, stateMap, supabase) {
       items_found_total: (state.items_found_total || 0) + discoveries.length,
     });
 
-    return { source: sourceName, count: discoveries.length, ok: true };
+    console.log(`[Scanner:${sourceName}] ${rawCount} raw → ${discoveries.length} products saved`);
+    return { source: sourceName, count: discoveries.length, raw: rawCount, ok: true };
   } catch (err) {
     console.error(`[Scanner:${sourceName}] Error: ${err.message}`);
     return { source: sourceName, count: 0, ok: false, error: err.message };
   }
 }
 
-export const maxDuration = 30; // Vercel Pro: up to 60s
+export const maxDuration = 55; // Vercel Pro: up to 60s
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -172,13 +203,10 @@ export async function GET(request) {
     const scanSource = source || "all";
 
     if (BATCHES[scanSource]) {
-      // Batch mode: run all sources in this batch IN PARALLEL
       sourcesToScan = BATCHES[scanSource];
     } else if (scanSource === "all") {
-      // All sources in parallel
       sourcesToScan = Object.values(BATCHES).flat();
     } else {
-      // Single source
       sourcesToScan = [scanSource];
     }
 
@@ -190,20 +218,24 @@ export async function GET(request) {
     // Collect results
     const results = {};
     const errors = [];
+    let totalRaw = 0;
     for (const r of scanResults) {
       if (r.status === "fulfilled") {
         results[r.value.source] = r.value.count;
+        totalRaw += r.value.raw || 0;
         if (!r.value.ok) errors.push(r.value.error);
       }
     }
 
     const totalFound = Object.values(results).reduce((a, b) => a + b, 0);
-    console.log(`[Scanner] ${scanSource}: ${totalFound} discoveries from ${sourcesToScan.length} sources`);
+    console.log(`[Scanner] ${scanSource}: ${totalFound} products from ${totalRaw} raw (${sourcesToScan.length} sources)`);
 
     return Response.json({
       success: errors.length === 0,
       source: scanSource,
       results,
+      total: totalFound,
+      raw_scanned: totalRaw,
       errors: errors.length > 0 ? errors : undefined,
       timestamp: new Date().toISOString(),
     });
@@ -219,7 +251,7 @@ export async function GET(request) {
     });
   }
 
-  const limit = Math.min(parseInt(searchParams.get("limit") || "50"), 200);
+  const limit = Math.min(parseInt(searchParams.get("limit") || "100"), 300);
   const offset = parseInt(searchParams.get("offset") || "0");
   const category = searchParams.get("category");
 
@@ -261,7 +293,7 @@ export async function GET(request) {
     },
     {
       headers: {
-        "Cache-Control": "public, s-maxage=10, stale-while-revalidate=30",
+        "Cache-Control": "no-store, no-cache, must-revalidate",
       },
     }
   );
