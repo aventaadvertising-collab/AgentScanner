@@ -68,7 +68,7 @@ export default function ScreenerClient() {
     fetchFeed().finally(() => setTimeout(() => setRefreshing(false), 500));
   }, [fetchFeed]);
 
-  useEffect(() => { fetchFeed(); const i = setInterval(fetchFeed, 30_000); return () => clearInterval(i); }, [fetchFeed]);
+  useEffect(() => { fetchFeed(); const i = setInterval(fetchFeed, 15_000); return () => clearInterval(i); }, [fetchFeed]);
 
   useEffect(() => {
     if (!supabase) return;
