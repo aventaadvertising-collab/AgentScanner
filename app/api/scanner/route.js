@@ -1,9 +1,14 @@
 // ============================================================
-// SCANNER API ROUTE v3
-// GET /api/scanner?secret=...&source=github  → cron-triggered scan
+// SCANNER API ROUTE v4 — BATCH PARALLEL SCANNING
+// GET /api/scanner?secret=...&source=batch1  → cron-triggered scan
 // GET /api/scanner                           → public feed
-// 11 sources: github, pypi, huggingface, hackernews, npm, reddit,
-//             producthunt, arxiv, github-trending, devto, lobsters
+//
+// 3 batch crons, each running sources IN PARALLEL:
+//   batch1: github, pypi, huggingface, hackernews (every minute)
+//   batch2: npm, reddit, producthunt, arxiv       (every minute)
+//   batch3: github-trending, devto, lobsters      (every minute)
+//
+// Also supports: source=all, source=<individual-source>
 // ============================================================
 
 import { createClient } from "@supabase/supabase-js";
@@ -19,6 +24,13 @@ import { scanGitHubTrending } from "@/lib/scanner/github-trending";
 import { scanDevTo } from "@/lib/scanner/devto";
 import { scanLobsters } from "@/lib/scanner/lobsters";
 
+// ── Batch definitions ──
+const BATCHES = {
+  batch1: ["github", "pypi", "huggingface", "hackernews"],
+  batch2: ["npm", "reddit", "producthunt", "arxiv"],
+  batch3: ["github-trending", "devto", "lobsters"],
+};
+
 function getSupabaseAdmin() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -26,7 +38,6 @@ function getSupabaseAdmin() {
   return createClient(url, key);
 }
 
-// Batch upsert discoveries (single DB round-trip instead of N)
 async function batchUpsert(supabase, discoveries) {
   if (!discoveries.length) return;
   const { error } = await supabase
@@ -35,13 +46,104 @@ async function batchUpsert(supabase, discoveries) {
   if (error) console.log(`[Scanner] Upsert error: ${error.message}`);
 }
 
-// Update scan state watermark
 async function updateState(supabase, source, updates) {
   await supabase.from("scanner_state").upsert(
     { source, ...updates },
     { onConflict: "source" }
   );
 }
+
+// ── Individual source scanner ──
+async function runSource(sourceName, stateMap, supabase) {
+  const state = stateMap[sourceName] || {};
+  let discoveries = [];
+  let stateUpdate = {};
+
+  try {
+    switch (sourceName) {
+      case "github": {
+        const r = await scanGitHub(process.env.GITHUB_TOKEN, state.last_event_id);
+        discoveries = r.discoveries;
+        stateUpdate = { last_scan_at: new Date().toISOString(), last_event_id: r.newLastEventId };
+        break;
+      }
+      case "pypi": {
+        const r = await scanPyPI(state.last_scan_at);
+        discoveries = r.discoveries;
+        stateUpdate = { last_scan_at: r.newLastScanAt };
+        break;
+      }
+      case "huggingface": {
+        const r = await scanHuggingFace(state.last_scan_at);
+        discoveries = r.discoveries;
+        stateUpdate = { last_scan_at: r.newLastScanAt };
+        break;
+      }
+      case "hackernews": {
+        const r = await scanHackerNews(state.last_event_id);
+        discoveries = r.discoveries;
+        stateUpdate = { last_scan_at: new Date().toISOString(), last_event_id: r.newLastItemId };
+        break;
+      }
+      case "npm": {
+        const r = await scanNpm(state.last_scan_at);
+        discoveries = r.discoveries;
+        stateUpdate = { last_scan_at: r.newLastScanAt };
+        break;
+      }
+      case "reddit": {
+        const r = await scanReddit(state.last_scan_at);
+        discoveries = r.discoveries;
+        stateUpdate = { last_scan_at: r.newLastScanAt };
+        break;
+      }
+      case "producthunt": {
+        const r = await scanProductHunt(state.last_scan_at);
+        discoveries = r.discoveries;
+        stateUpdate = { last_scan_at: r.newLastScanAt };
+        break;
+      }
+      case "arxiv": {
+        const r = await scanArxiv(state.last_scan_at);
+        discoveries = r.discoveries;
+        stateUpdate = { last_scan_at: r.newLastScanAt };
+        break;
+      }
+      case "github-trending": {
+        const r = await scanGitHubTrending(state.last_scan_at);
+        discoveries = r.discoveries;
+        stateUpdate = { last_scan_at: r.newLastScanAt };
+        break;
+      }
+      case "devto": {
+        const r = await scanDevTo(state.last_scan_at);
+        discoveries = r.discoveries;
+        stateUpdate = { last_scan_at: r.newLastScanAt };
+        break;
+      }
+      case "lobsters": {
+        const r = await scanLobsters(state.last_scan_at);
+        discoveries = r.discoveries;
+        stateUpdate = { last_scan_at: r.newLastScanAt };
+        break;
+      }
+    }
+
+    // Persist results
+    await batchUpsert(supabase, discoveries);
+    await updateState(supabase, sourceName, {
+      ...stateUpdate,
+      items_found_total: (state.items_found_total || 0) + discoveries.length,
+    });
+
+    return { source: sourceName, count: discoveries.length, ok: true };
+  } catch (err) {
+    console.error(`[Scanner:${sourceName}] Error: ${err.message}`);
+    return { source: sourceName, count: 0, ok: false, error: err.message };
+  }
+}
+
+export const maxDuration = 30; // Vercel Pro: up to 60s
 
 export async function GET(request) {
   const { searchParams } = new URL(request.url);
@@ -65,163 +167,44 @@ export async function GET(request) {
       (states || []).map((s) => [s.source, s])
     );
 
-    const results = {};
+    // Determine which sources to scan
+    let sourcesToScan = [];
     const scanSource = source || "all";
 
-    try {
-      // ── GitHub ──
-      if (scanSource === "all" || scanSource === "github") {
-        const ghState = stateMap.github || {};
-        const { discoveries, newLastEventId } = await scanGitHub(
-          process.env.GITHUB_TOKEN,
-          ghState.last_event_id
-        );
-        await batchUpsert(supabase, discoveries);
-        await updateState(supabase, "github", {
-          last_scan_at: new Date().toISOString(),
-          last_event_id: newLastEventId,
-          items_found_total: (ghState.items_found_total || 0) + discoveries.length,
-        });
-        results.github = discoveries.length;
-      }
-
-      // ── PyPI ──
-      if (scanSource === "all" || scanSource === "pypi") {
-        const pypiState = stateMap.pypi || {};
-        const { discoveries, newLastScanAt } = await scanPyPI(pypiState.last_scan_at);
-        await batchUpsert(supabase, discoveries);
-        await updateState(supabase, "pypi", {
-          last_scan_at: newLastScanAt,
-          items_found_total: (pypiState.items_found_total || 0) + discoveries.length,
-        });
-        results.pypi = discoveries.length;
-      }
-
-      // ── HuggingFace ──
-      if (scanSource === "all" || scanSource === "huggingface") {
-        const hfState = stateMap.huggingface || {};
-        const { discoveries, newLastScanAt } = await scanHuggingFace(hfState.last_scan_at);
-        await batchUpsert(supabase, discoveries);
-        await updateState(supabase, "huggingface", {
-          last_scan_at: newLastScanAt,
-          items_found_total: (hfState.items_found_total || 0) + discoveries.length,
-        });
-        results.huggingface = discoveries.length;
-      }
-
-      // ── Hacker News ──
-      if (scanSource === "all" || scanSource === "hackernews") {
-        const hnState = stateMap.hackernews || {};
-        const { discoveries, newLastItemId } = await scanHackerNews(hnState.last_event_id);
-        await batchUpsert(supabase, discoveries);
-        await updateState(supabase, "hackernews", {
-          last_scan_at: new Date().toISOString(),
-          last_event_id: newLastItemId,
-          items_found_total: (hnState.items_found_total || 0) + discoveries.length,
-        });
-        results.hackernews = discoveries.length;
-      }
-
-      // ── npm ──
-      if (scanSource === "all" || scanSource === "npm") {
-        const npmState = stateMap.npm || {};
-        const { discoveries, newLastScanAt } = await scanNpm(npmState.last_scan_at);
-        await batchUpsert(supabase, discoveries);
-        await updateState(supabase, "npm", {
-          last_scan_at: newLastScanAt,
-          items_found_total: (npmState.items_found_total || 0) + discoveries.length,
-        });
-        results.npm = discoveries.length;
-      }
-
-      // ── Reddit ──
-      if (scanSource === "all" || scanSource === "reddit") {
-        const redditState = stateMap.reddit || {};
-        const { discoveries, newLastScanAt } = await scanReddit(redditState.last_scan_at);
-        await batchUpsert(supabase, discoveries);
-        await updateState(supabase, "reddit", {
-          last_scan_at: newLastScanAt,
-          items_found_total: (redditState.items_found_total || 0) + discoveries.length,
-        });
-        results.reddit = discoveries.length;
-      }
-
-      // ── Product Hunt ──
-      if (scanSource === "all" || scanSource === "producthunt") {
-        const phState = stateMap.producthunt || {};
-        const { discoveries, newLastScanAt } = await scanProductHunt(phState.last_scan_at);
-        await batchUpsert(supabase, discoveries);
-        await updateState(supabase, "producthunt", {
-          last_scan_at: newLastScanAt,
-          items_found_total: (phState.items_found_total || 0) + discoveries.length,
-        });
-        results.producthunt = discoveries.length;
-      }
-
-      // ── arXiv ──
-      if (scanSource === "all" || scanSource === "arxiv") {
-        const arxivState = stateMap.arxiv || {};
-        const { discoveries, newLastScanAt } = await scanArxiv(arxivState.last_scan_at);
-        await batchUpsert(supabase, discoveries);
-        await updateState(supabase, "arxiv", {
-          last_scan_at: newLastScanAt,
-          items_found_total: (arxivState.items_found_total || 0) + discoveries.length,
-        });
-        results.arxiv = discoveries.length;
-      }
-
-      // ── GitHub Trending ──
-      if (scanSource === "all" || scanSource === "github-trending") {
-        const gtState = stateMap["github-trending"] || {};
-        const { discoveries, newLastScanAt } = await scanGitHubTrending(gtState.last_scan_at);
-        await batchUpsert(supabase, discoveries);
-        await updateState(supabase, "github-trending", {
-          last_scan_at: newLastScanAt,
-          items_found_total: (gtState.items_found_total || 0) + discoveries.length,
-        });
-        results["github-trending"] = discoveries.length;
-      }
-
-      // ── Dev.to ──
-      if (scanSource === "all" || scanSource === "devto") {
-        const devtoState = stateMap.devto || {};
-        const { discoveries, newLastScanAt } = await scanDevTo(devtoState.last_scan_at);
-        await batchUpsert(supabase, discoveries);
-        await updateState(supabase, "devto", {
-          last_scan_at: newLastScanAt,
-          items_found_total: (devtoState.items_found_total || 0) + discoveries.length,
-        });
-        results.devto = discoveries.length;
-      }
-
-      // ── Lobsters ──
-      if (scanSource === "all" || scanSource === "lobsters") {
-        const lState = stateMap.lobsters || {};
-        const { discoveries, newLastScanAt } = await scanLobsters(lState.last_scan_at);
-        await batchUpsert(supabase, discoveries);
-        await updateState(supabase, "lobsters", {
-          last_scan_at: newLastScanAt,
-          items_found_total: (lState.items_found_total || 0) + discoveries.length,
-        });
-        results.lobsters = discoveries.length;
-      }
-    } catch (err) {
-      console.error(`[Scanner] Error in ${scanSource}: ${err.message}`);
-      return Response.json({
-        success: false,
-        source: scanSource,
-        error: err.message,
-        results,
-        timestamp: new Date().toISOString(),
-      }, { status: 500 });
+    if (BATCHES[scanSource]) {
+      // Batch mode: run all sources in this batch IN PARALLEL
+      sourcesToScan = BATCHES[scanSource];
+    } else if (scanSource === "all") {
+      // All sources in parallel
+      sourcesToScan = Object.values(BATCHES).flat();
+    } else {
+      // Single source
+      sourcesToScan = [scanSource];
     }
 
-    console.log(`[Scanner] Scan complete: ${JSON.stringify(results)}`);
+    // Run all selected sources IN PARALLEL
+    const scanResults = await Promise.allSettled(
+      sourcesToScan.map((s) => runSource(s, stateMap, supabase))
+    );
+
+    // Collect results
+    const results = {};
+    const errors = [];
+    for (const r of scanResults) {
+      if (r.status === "fulfilled") {
+        results[r.value.source] = r.value.count;
+        if (!r.value.ok) errors.push(r.value.error);
+      }
+    }
+
+    const totalFound = Object.values(results).reduce((a, b) => a + b, 0);
+    console.log(`[Scanner] ${scanSource}: ${totalFound} discoveries from ${sourcesToScan.length} sources`);
 
     return Response.json({
-      success: true,
+      success: errors.length === 0,
       source: scanSource,
       results,
+      errors: errors.length > 0 ? errors : undefined,
       timestamp: new Date().toISOString(),
     });
   }
