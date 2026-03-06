@@ -7,7 +7,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { REGISTRY } from "@/lib/pipeline/registry";
-import { fetchGitHubMetrics } from "@/lib/pipeline/github";
+import { fetchGitHubMetrics, fetchGitHubCommitActivity } from "@/lib/pipeline/github";
 import { checkUptime } from "@/lib/pipeline/uptime";
 import { fetchTrancoRank, estimateTrafficFromRank, detectTechStack } from "@/lib/pipeline/traffic";
 import { getFundingData } from "@/lib/pipeline/funding";
@@ -52,9 +52,19 @@ export async function GET(request) {
             fetched_at: new Date().toISOString(),
           }, { onConflict: "product_id,source" });
         }
+        // Fetch commit activity heatmap data
+        const activity = await fetchGitHubCommitActivity(product.g.o, product.g.r, ghToken);
+        if (activity && supabase) {
+          await supabase.from("pipeline_data").upsert({
+            product_id: product.id,
+            source: "github_activity",
+            data: activity,
+            fetched_at: new Date().toISOString(),
+          }, { onConflict: "product_id,source" });
+        }
       }
     }
-    console.log(`[Pipeline] GitHub: fetched ${Object.keys(results.github).length} repos`);
+    console.log(`[Pipeline] GitHub: fetched ${Object.keys(results.github).length} repos + commit activity`);
   }
 
   // ---- UPTIME ----
