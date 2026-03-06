@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { REGISTRY } from "@/lib/pipeline/registry";
 import { CompactHeatmap } from "@/app/components/CommitHeatmap";
 import { getSupabase } from "@/lib/supabase";
@@ -36,22 +36,18 @@ function getTrend(weeks) {
   return { dir: change >= 0 ? "up" : "down", pct: Math.abs(change) };
 }
 
-// Build last-14-day daily counts from weeks data
 function getLast14Days(weeks) {
   if (!weeks || weeks.length < 2) return null;
-  // Last 2 weeks: take last 2 week entries, flatten daily counts
   const last2 = weeks.slice(-2);
   const days = [];
   for (const wk of last2) {
-    for (let d = 0; d < 7; d++) {
-      days.push(wk.d?.[d] || 0);
-    }
+    for (let d = 0; d < 7; d++) days.push(wk.d?.[d] || 0);
   }
-  return days.slice(-14); // last 14 days
+  return days.slice(-14);
 }
 
 // ────────────────────────────────────────────
-// Daily Activity Bars — last 14 days, sparkline style
+// Daily Activity Bars — last 14 days
 // ────────────────────────────────────────────
 function DailyBars({ days, w = 260, h = 48 }) {
   if (!days || !days.length) return null;
@@ -65,7 +61,6 @@ function DailyBars({ days, w = 260, h = 48 }) {
         const barH = Math.max((count / max) * (h - 4), count > 0 ? 2 : 0);
         const x = 1 + i * (barW + gap);
         const y = h - 2 - barH;
-        // Last 3 days highlighted
         const isRecent = i >= days.length - 3;
         const opacity = count === 0 ? 0.08 : isRecent ? 0.85 : 0.45;
         return (
@@ -80,33 +75,19 @@ function DailyBars({ days, w = 260, h = 48 }) {
           />
         );
       })}
-      {/* baseline */}
       <line x1={0} y1={h - 1} x2={w} y2={h - 1} stroke="rgba(255,255,255,.04)" strokeWidth={1} />
     </svg>
   );
 }
 
 // ────────────────────────────────────────────
-// Product Card — self-loading, fetches own data
+// Product Card — receives data from parent
 // ────────────────────────────────────────────
-function ProductCard({ product, index }) {
-  const [weeks, setWeeks] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [fetchedAt, setFetchedAt] = useState(null);
-
-  useEffect(() => {
-    if (!product.repo) { setLoading(false); return; }
-    fetch(`/api/commit-activity?repo=${encodeURIComponent(product.repo)}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (d?.weeks) {
-          setWeeks(d.weeks);
-          setFetchedAt(d.fetched_at);
-        }
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, [product.repo]);
+function ProductCard({ product, data, index }) {
+  const weeks = data?.weeks || null;
+  const fetchedAt = data?.fetched_at || null;
+  const status = data?.status || "pending"; // pending | loading | loaded | error
+  const errorMsg = data?.error || null;
 
   const days14 = useMemo(() => getLast14Days(weeks), [weeks]);
   const recent4wk = useMemo(() => recentTotal(weeks, 4), [weeks]);
@@ -132,7 +113,7 @@ function ProductCard({ product, index }) {
       </div>
 
       {/* Activity visualization */}
-      {loading ? (
+      {status === "pending" || status === "loading" ? (
         <div style={{ height: 48, borderRadius: 6, background: "rgba(255,255,255,.02)", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <div style={{ width: "50%", height: 3, borderRadius: 2, background: "rgba(255,255,255,.04)", overflow: "hidden", position: "relative" }}>
             <div style={{ width: "30%", height: "100%", borderRadius: 2, background: "rgba(45,212,191,.3)", position: "absolute", animation: "scan 1.5s ease-in-out infinite" }} />
@@ -140,6 +121,10 @@ function ProductCard({ product, index }) {
         </div>
       ) : days14 ? (
         <DailyBars days={days14} w={280} h={48} />
+      ) : status === "error" ? (
+        <div style={{ height: 48, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 6, background: "rgba(220,38,38,.04)", border: "1px solid rgba(220,38,38,.1)" }}>
+          <span style={{ fontSize: 10, color: "var(--dn)", fontFamily: "var(--m)" }}>{errorMsg || "fetch failed"}</span>
+        </div>
       ) : (
         <div style={{ height: 48, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 6, background: "rgba(255,255,255,.02)" }}>
           <span style={{ fontSize: 10, color: "var(--t4)", fontFamily: "var(--m)" }}>No data yet</span>
@@ -147,20 +132,21 @@ function ProductCard({ product, index }) {
       )}
 
       {/* Stats row */}
-      <div style={{ display: "flex", gap: 14, marginTop: 8, alignItems: "center" }}>
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--t4)", fontFamily: "var(--m)" }}>Today</span>
-          <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "var(--m)", color: todayCommits > 0 ? "var(--g)" : "var(--t3)" }}>{todayCommits}</span>
+      {weeks && (
+        <div style={{ display: "flex", gap: 14, marginTop: 8, alignItems: "center" }}>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--t4)", fontFamily: "var(--m)" }}>Today</span>
+            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "var(--m)", color: todayCommits > 0 ? "var(--g)" : "var(--t3)" }}>{todayCommits}</span>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column" }}>
+            <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--t4)", fontFamily: "var(--m)" }}>4 wk</span>
+            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "var(--m)", color: "var(--t1)" }}>{recent4wk}</span>
+          </div>
+          {fetchedAt && (
+            <span style={{ fontSize: 9, color: "var(--t4)", fontFamily: "var(--m)", marginLeft: "auto" }}>{timeAgo(fetchedAt)}</span>
+          )}
         </div>
-        <div style={{ display: "flex", flexDirection: "column" }}>
-          <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--t4)", fontFamily: "var(--m)" }}>4 wk</span>
-          <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "var(--m)", color: "var(--t1)" }}>{recent4wk}</span>
-        </div>
-        {fetchedAt && (
-          <span style={{ fontSize: 9, color: "var(--t4)", fontFamily: "var(--m)", marginLeft: "auto" }}>{timeAgo(fetchedAt)}</span>
-        )}
-        <span style={{ fontSize: 9, color: "var(--t4)", fontFamily: "var(--m)" }}>14d</span>
-      </div>
+      )}
     </div>
   );
 }
@@ -185,75 +171,103 @@ function BreakoutCard({ item, index }) {
   const days14 = useMemo(() => getLast14Days(heatWeeks), [heatWeeks]);
 
   return (
-    <a
-      href={item.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="breakout-card"
+    <a href={item.url} target="_blank" rel="noopener noreferrer" className="breakout-card"
       style={{
-        display: "block",
-        textDecoration: "none",
-        color: "inherit",
-        padding: "12px 14px",
-        borderRadius: 10,
-        background: "var(--s1)",
+        display: "block", textDecoration: "none", color: "inherit",
+        padding: "12px 14px", borderRadius: 10, background: "var(--s1)",
         border: "1px solid var(--b1)",
         borderLeft: surging ? "2px solid var(--g)" : "1px solid var(--b1)",
         animation: `fi .35s ease ${Math.min(index * 0.05, 0.4)}s both${isNew ? ", bk-glow 2s ease-in-out infinite" : ""}`,
-        transition: "all .2s",
-        position: "relative",
-        overflow: "hidden",
-      }}
-    >
+        transition: "all .2s", position: "relative", overflow: "hidden",
+      }}>
       <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: surging ? "linear-gradient(90deg, transparent, rgba(45,212,191,.15), transparent)" : "linear-gradient(90deg, transparent, rgba(255,255,255,.04), transparent)" }} />
-
-      {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, flex: 1 }}>
           {isNew && <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--g)", animation: "lp 2s ease-in-out infinite", flexShrink: 0 }} />}
           <span style={{ fontSize: 12, fontWeight: 700, color: "var(--t1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</span>
-          {surging && (
-            <span style={{ fontSize: 8, fontWeight: 700, fontFamily: "var(--m)", padding: "1px 5px", borderRadius: 3, background: "rgba(45,212,191,.12)", color: "var(--g)", letterSpacing: ".04em", flexShrink: 0 }}>SURGING</span>
-          )}
+          {surging && <span style={{ fontSize: 8, fontWeight: 700, fontFamily: "var(--m)", padding: "1px 5px", borderRadius: 3, background: "rgba(45,212,191,.12)", color: "var(--g)", letterSpacing: ".04em", flexShrink: 0 }}>SURGING</span>}
         </div>
         <span style={{ fontSize: 9, color: "var(--t4)", fontFamily: "var(--m)", flexShrink: 0, marginLeft: 6 }}>
           {item.discovered_at ? timeAgo(item.discovered_at) : ""}
         </span>
       </div>
-
-      {/* Author + stars */}
       <div style={{ fontSize: 10, color: "var(--t3)", fontFamily: "var(--m)", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
         <span>{item.author || repoPath}</span>
         {item.stars > 0 && <span style={{ color: "var(--t4)" }}>&#9733; {item.stars >= 1000 ? `${(item.stars / 1000).toFixed(1)}k` : item.stars}</span>}
       </div>
-
-      {/* Daily activity bars */}
       {days14 ? (
-        <div style={{ marginBottom: 8, opacity: 0.9 }}>
-          <DailyBars days={days14} w={280} h={32} />
-        </div>
+        <div style={{ marginBottom: 8, opacity: 0.9 }}><DailyBars days={days14} w={280} h={32} /></div>
       ) : heatWeeks ? (
-        <div style={{ marginBottom: 8, opacity: 0.9 }}>
-          <CompactHeatmap weeks={heatWeeks} w={280} h={32} />
-        </div>
+        <div style={{ marginBottom: 8, opacity: 0.9 }}><CompactHeatmap weeks={heatWeeks} w={280} h={32} /></div>
       ) : null}
-
-      {/* Stats */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        {item.upvotes > 0 && (
-          <span style={{ fontSize: 10, fontWeight: 600, fontFamily: "var(--m)", color: "var(--up)" }}>
-            {item.upvotes} /4wk
-          </span>
-        )}
-        {item.language && (
-          <span style={{ fontSize: 9, fontFamily: "var(--m)", color: "var(--t4)", padding: "1px 5px", borderRadius: 3, background: "rgba(255,255,255,.03)", border: "1px solid var(--b1)" }}>{item.language}</span>
-        )}
-        {item.category && (
-          <span style={{ fontSize: 9, fontFamily: "var(--m)", color: "var(--t4)", padding: "1px 5px", borderRadius: 3, background: "rgba(255,255,255,.03)", border: "1px solid var(--b1)" }}>{item.category}</span>
-        )}
+        {item.upvotes > 0 && <span style={{ fontSize: 10, fontWeight: 600, fontFamily: "var(--m)", color: "var(--up)" }}>{item.upvotes} /4wk</span>}
+        {item.language && <span style={{ fontSize: 9, fontFamily: "var(--m)", color: "var(--t4)", padding: "1px 5px", borderRadius: 3, background: "rgba(255,255,255,.03)", border: "1px solid var(--b1)" }}>{item.language}</span>}
+        {item.category && <span style={{ fontSize: 9, fontFamily: "var(--m)", color: "var(--t4)", padding: "1px 5px", borderRadius: 3, background: "rgba(255,255,255,.03)", border: "1px solid var(--b1)" }}>{item.category}</span>}
       </div>
     </a>
   );
+}
+
+// ────────────────────────────────────────────
+// Fetch queue — processes repos 5 at a time
+// ────────────────────────────────────────────
+function useFetchQueue(repos) {
+  const [dataMap, setDataMap] = useState({});
+  const [progress, setProgress] = useState({ done: 0, total: 0, errors: 0 });
+  const queueRef = useRef([]);
+  const activeRef = useRef(0);
+  const startedRef = useRef(false);
+  const CONCURRENCY = 5;
+
+  const processNext = useCallback(() => {
+    while (activeRef.current < CONCURRENCY && queueRef.current.length > 0) {
+      const { repo, id } = queueRef.current.shift();
+      activeRef.current++;
+
+      // Mark as loading
+      setDataMap((prev) => ({ ...prev, [id]: { ...prev[id], status: "loading" } }));
+
+      fetch(`/api/commit-activity?repo=${encodeURIComponent(repo)}`)
+        .then((r) => r.json().catch(() => ({ weeks: null, error: `http_${r.status}` })))
+        .then((d) => {
+          if (d?.weeks) {
+            setDataMap((prev) => ({
+              ...prev,
+              [id]: { weeks: d.weeks, fetched_at: d.fetched_at, status: "loaded", source: d.source },
+            }));
+          } else {
+            setDataMap((prev) => ({
+              ...prev,
+              [id]: { status: "error", error: d?.error || "no_weeks" },
+            }));
+            setProgress((p) => ({ ...p, errors: p.errors + 1 }));
+          }
+          setProgress((p) => ({ ...p, done: p.done + 1 }));
+        })
+        .catch((err) => {
+          setDataMap((prev) => ({ ...prev, [id]: { status: "error", error: err.message } }));
+          setProgress((p) => ({ ...p, done: p.done + 1, errors: p.errors + 1 }));
+        })
+        .finally(() => {
+          activeRef.current--;
+          processNext();
+        });
+    }
+  }, []);
+
+  useEffect(() => {
+    if (startedRef.current || !repos || repos.length === 0) return;
+    startedRef.current = true;
+
+    queueRef.current = repos.map((p) => ({ repo: p.repo, id: p.id }));
+    setProgress({ done: 0, total: repos.length, errors: 0 });
+    setDataMap(Object.fromEntries(repos.map((p) => [p.id, { status: "pending" }])));
+
+    processNext();
+  }, [repos, processNext]);
+
+  return { dataMap, progress };
 }
 
 // ────────────────────────────────────────────
@@ -264,50 +278,19 @@ export default function ActivityClient() {
   const [q, setQ] = useState("");
   const [tick, setTick] = useState(0);
 
-  // Breakout feed state
+  // Breakout feed
   const [breakouts, setBreakouts] = useState([]);
   const [breakoutsLoading, setBreakoutsLoading] = useState(true);
 
-  // ─── FETCH BREAKOUTS ───
-  useEffect(() => {
-    fetch("/api/scanner?source=github-momentum&limit=50")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (d?.discoveries) {
-          setBreakouts(d.discoveries.sort((a, b) => new Date(b.discovered_at) - new Date(a.discovered_at)));
-        }
-        setBreakoutsLoading(false);
-      })
-      .catch(() => setBreakoutsLoading(false));
+  // Build product list
+  const products = useMemo(() => {
+    return REGISTRY
+      .filter((p) => p.g)
+      .map((p) => ({ id: p.id, name: p.name, category: p.cat, repo: `${p.g.o}/${p.g.r}` }));
   }, []);
 
-  // ─── SUPABASE REAL-TIME FOR BREAKOUTS ───
-  useEffect(() => {
-    const supabase = getSupabase();
-    if (!supabase) return;
-
-    const channel = supabase
-      .channel("activity-breakouts")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "scanner_discoveries",
-          filter: "source=eq.github-momentum",
-        },
-        (payload) => {
-          setBreakouts((prev) => {
-            const id = payload.new.id || payload.new.external_id;
-            if (prev.some((d) => (d.id || d.external_id) === id)) return prev;
-            return [payload.new, ...prev].slice(0, 100);
-          });
-        }
-      )
-      .subscribe();
-
-    return () => supabase.removeChannel(channel);
-  }, []);
+  // Centralized fetch queue — 5 concurrent requests
+  const { dataMap, progress } = useFetchQueue(products);
 
   // ─── FETCH BREAKOUTS ───
   useEffect(() => {
@@ -329,22 +312,16 @@ export default function ActivityClient() {
 
     const channel = supabase
       .channel("activity-breakouts")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "scanner_discoveries",
-          filter: "source=eq.github-momentum",
-        },
-        (payload) => {
-          setBreakouts((prev) => {
-            const id = payload.new.id || payload.new.external_id;
-            if (prev.some((d) => (d.id || d.external_id) === id)) return prev;
-            return [payload.new, ...prev].slice(0, 100);
-          });
-        }
-      )
+      .on("postgres_changes", {
+        event: "INSERT", schema: "public", table: "scanner_discoveries",
+        filter: "source=eq.github-momentum",
+      }, (payload) => {
+        setBreakouts((prev) => {
+          const id = payload.new.id || payload.new.external_id;
+          if (prev.some((d) => (d.id || d.external_id) === id)) return prev;
+          return [payload.new, ...prev].slice(0, 100);
+        });
+      })
       .subscribe();
 
     return () => supabase.removeChannel(channel);
@@ -364,25 +341,12 @@ export default function ActivityClient() {
     return () => clearInterval(i);
   }, []);
 
-  // Build product list (no pre-fetched data needed — each card fetches its own)
-  const products = useMemo(() => {
-    return REGISTRY
-      .filter((p) => p.g)
-      .map((p) => ({
-        id: p.id,
-        name: p.name,
-        category: p.cat,
-        repo: `${p.g.o}/${p.g.r}`,
-      }));
-  }, []);
-
   // Categories
   const catCounts = useMemo(() => {
     const c = {};
     for (const p of products) if (p.category) c[p.category] = (c[p.category] || 0) + 1;
     return c;
   }, [products]);
-
   const topCats = useMemo(() =>
     Object.entries(catCounts).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([c]) => c),
   [catCounts]);
@@ -399,6 +363,7 @@ export default function ActivityClient() {
   }, [products, cat, q]);
 
   const surgingCount = breakouts.filter((b) => b.topics?.includes("surging")).length;
+  const pctDone = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
 
   void tick;
 
@@ -429,10 +394,9 @@ export default function ActivityClient() {
         .link-hover:hover { color: var(--g) !important; }
         @media (max-width: 1024px) {
           .activity-layout { flex-direction: column !important; }
-          .breakout-sidebar { width: 100% !important; max-height: none !important; position: relative !important; top: auto !important; border-right: none !important; border-bottom: 1px solid var(--b1) !important; height: auto !important; }
+          .breakout-sidebar { width: 100% !important; position: relative !important; top: auto !important; border-right: none !important; border-bottom: 1px solid var(--b1) !important; height: auto !important; }
           .breakout-feed { flex-direction: row !important; overflow-x: auto !important; overflow-y: hidden !important; padding-bottom: 8px !important; gap: 10px !important; max-height: none !important; }
           .breakout-feed > a { min-width: 280px !important; flex-shrink: 0 !important; }
-          .activity-main-stats { grid-template-columns: repeat(2, 1fr) !important; }
         }
         @media (max-width: 768px) {
           .activity-header { padding: 0 12px !important; }
@@ -461,12 +425,18 @@ export default function ActivityClient() {
           <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: "var(--t2)", letterSpacing: ".06em", padding: "3px 10px", borderRadius: 4, background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.06)" }}>ACTIVITY</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+          {/* Fetch progress indicator */}
+          {progress.total > 0 && progress.done < progress.total && (
+            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 12px", borderRadius: 4, background: "rgba(255,255,255,.02)", border: "1px solid rgba(255,255,255,.06)" }}>
+              <div style={{ width: 40, height: 3, borderRadius: 2, background: "rgba(255,255,255,.06)", overflow: "hidden" }}>
+                <div style={{ width: `${pctDone}%`, height: "100%", borderRadius: 2, background: "var(--g)", transition: "width .3s" }} />
+              </div>
+              <span style={{ fontSize: 9, fontFamily: "var(--m)", color: "var(--t3)" }}>{progress.done}/{progress.total}</span>
+            </div>
+          )}
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 14px", borderRadius: 4, background: "rgba(255,255,255,.02)", border: "1px solid rgba(255,255,255,.06)" }}>
             <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#2DD4BF", animation: "lp 2s ease-in-out infinite" }} />
             <span style={{ fontSize: 10, fontWeight: 600, color: "var(--t3)", fontFamily: "var(--m)", letterSpacing: ".04em" }}>LIVE</span>
-            <div style={{ width: 30, height: 2, borderRadius: 1, background: "rgba(255,255,255,.06)", overflow: "hidden" }}>
-              <div style={{ width: "30%", height: "100%", background: "rgba(45,212,191,.4)", animation: "scan-line 2s ease-in-out infinite" }} />
-            </div>
           </div>
           <a href="/dashboard" className="link-hover" style={{ fontSize: 11, fontWeight: 600, color: "var(--t3)", padding: "5px 12px", borderRadius: 4, border: "1px solid var(--b1)", textDecoration: "none", fontFamily: "var(--m)" }}>Dashboard</a>
           <a href="/screener" className="link-hover" style={{ fontSize: 11, fontWeight: 600, color: "var(--t3)", padding: "5px 12px", borderRadius: 4, border: "1px solid var(--b1)", textDecoration: "none", fontFamily: "var(--m)" }}>Screener</a>
@@ -478,17 +448,13 @@ export default function ActivityClient() {
 
         {/* ─── LEFT: BREAKOUT FEED ─── */}
         <aside className="breakout-sidebar" style={{ width: 340, flexShrink: 0, borderRight: "1px solid var(--b1)", background: "rgba(10,11,16,.5)", position: "sticky", top: 56, height: "calc(100vh - 56px)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-
-          {/* Breakout Header */}
           <div style={{ padding: "16px 16px 12px", borderBottom: "1px solid var(--b1)", flexShrink: 0 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--g)", animation: "lp 2s ease-in-out infinite" }} />
                 <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", letterSpacing: ".08em", color: "var(--t2)" }}>BREAKOUTS</span>
               </div>
-              <span style={{ fontSize: 10, fontFamily: "var(--m)", color: "var(--t3)" }}>
-                {breakouts.length} detected
-              </span>
+              <span style={{ fontSize: 10, fontFamily: "var(--m)", color: "var(--t3)" }}>{breakouts.length} detected</span>
             </div>
             <div style={{ display: "flex", gap: 10 }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
@@ -501,8 +467,6 @@ export default function ActivityClient() {
               </div>
             </div>
           </div>
-
-          {/* Feed */}
           <div className="breakout-feed" style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
             {breakoutsLoading ? (
               <div style={{ padding: "40px 0", textAlign: "center" }}>
@@ -515,21 +479,17 @@ export default function ActivityClient() {
               <div style={{ padding: "40px 0", textAlign: "center" }}>
                 <div style={{ fontSize: 24, marginBottom: 8, opacity: 0.3 }}>&#9672;</div>
                 <div style={{ fontSize: 11, color: "var(--t3)", fontFamily: "var(--m)", lineHeight: 1.5 }}>
-                  No momentum breakouts yet.<br />
-                  Scanner runs every minute.
+                  No momentum breakouts yet.<br />Scanner runs every minute.
                 </div>
               </div>
-            ) : (
-              breakouts.map((item, i) => (
-                <BreakoutCard key={item.id || item.external_id || i} item={item} index={i} />
-              ))
-            )}
+            ) : breakouts.map((item, i) => (
+              <BreakoutCard key={item.id || item.external_id || i} item={item} index={i} />
+            ))}
           </div>
         </aside>
 
         {/* ─── RIGHT: PRODUCT GRID ─── */}
         <main style={{ flex: 1, minWidth: 0 }}>
-
           {/* Toolbar */}
           <div className="activity-toolbar" style={{ padding: "16px 24px", display: "flex", alignItems: "center", gap: 12 }}>
             <div className="activity-pills" style={{ display: "flex", gap: 6, flex: 1, overflow: "hidden", flexWrap: "wrap" }}>
@@ -543,30 +503,42 @@ export default function ActivityClient() {
               ))}
             </div>
             <div style={{ position: "relative" }}>
-              <input
-                value={q}
-                onChange={(e) => setQ(e.target.value)}
-                placeholder="Search..."
-                style={{ width: 180, padding: "7px 12px 7px 30px", borderRadius: 6, border: "1px solid var(--b1)", background: "rgba(255,255,255,.03)", color: "var(--t1)", fontSize: 12, fontFamily: "var(--m)", outline: "none" }}
-              />
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search..."
+                style={{ width: 180, padding: "7px 12px 7px 30px", borderRadius: 6, border: "1px solid var(--b1)", background: "rgba(255,255,255,.03)", color: "var(--t1)", fontSize: 12, fontFamily: "var(--m)", outline: "none" }} />
               <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "var(--t3)", pointerEvents: "none" }}>&#8981;</span>
             </div>
           </div>
 
-          {/* Grid — each card self-loads its data */}
+          {/* Progress bar when loading */}
+          {progress.total > 0 && progress.done < progress.total && (
+            <div style={{ padding: "0 24px 12px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 8, background: "var(--s1)", border: "1px solid var(--b1)" }}>
+                <div style={{ flex: 1, height: 4, borderRadius: 2, background: "rgba(255,255,255,.04)", overflow: "hidden" }}>
+                  <div style={{ width: `${pctDone}%`, height: "100%", borderRadius: 2, background: "var(--g)", transition: "width .3s ease" }} />
+                </div>
+                <span style={{ fontSize: 10, fontFamily: "var(--m)", color: "var(--t3)", whiteSpace: "nowrap" }}>
+                  Fetching {progress.done}/{progress.total}
+                  {progress.errors > 0 && <span style={{ color: "var(--dn)" }}> · {progress.errors} errors</span>}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Grid */}
           <div className="activity-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, padding: "0 24px 40px" }}>
             {filtered.map((p, i) => (
-              <ProductCard key={p.id} product={p} index={i} />
+              <ProductCard key={p.id} product={p} data={dataMap[p.id]} index={i} />
             ))}
           </div>
 
           {/* Footer */}
           <footer className="activity-footer" style={{ padding: "20px 24px", borderTop: "1px solid var(--b1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <span style={{ fontSize: 10, color: "var(--t3)", fontFamily: "var(--m)" }}>
-              {filtered.length} product{filtered.length !== 1 ? "s" : ""} · each card loads independently
+              {filtered.length} product{filtered.length !== 1 ? "s" : ""} · {progress.done - progress.errors} loaded
+              {progress.errors > 0 && <span style={{ color: "var(--dn)" }}> · {progress.errors} failed</span>}
             </span>
             <span style={{ fontSize: 10, color: "var(--t3)", fontFamily: "var(--m)" }}>
-              14-day daily view · cached 24h
+              14-day view · 5 concurrent fetches · cached 24h
             </span>
           </footer>
         </main>
