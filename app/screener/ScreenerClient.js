@@ -37,10 +37,10 @@ function sourceLabel(url) {
 }
 
 function confidenceGrade(c) {
-  if (c >= 90) return { label: "S", color: "#10B981", bg: "rgba(16,185,129,.1)", border: "rgba(16,185,129,.2)" };
-  if (c >= 75) return { label: "A", color: "#2563EB", bg: "rgba(37,99,235,.1)", border: "rgba(37,99,235,.2)" };
-  if (c >= 60) return { label: "B", color: "#8B5CF6", bg: "rgba(139,92,246,.1)", border: "rgba(139,92,246,.2)" };
-  if (c >= 40) return { label: "C", color: "#F59E0B", bg: "rgba(245,158,11,.1)", border: "rgba(245,158,11,.2)" };
+  if (c >= 90) return { label: "S", color: "#00FFAA", bg: "rgba(0,255,170,.1)", border: "rgba(0,255,170,.2)" };
+  if (c >= 75) return { label: "A", color: "#A78BFA", bg: "rgba(167,139,250,.1)", border: "rgba(167,139,250,.2)" };
+  if (c >= 60) return { label: "B", color: "#38BDF8", bg: "rgba(56,189,248,.1)", border: "rgba(56,189,248,.2)" };
+  if (c >= 40) return { label: "C", color: "#FBBF24", bg: "rgba(251,191,36,.1)", border: "rgba(251,191,36,.2)" };
   return { label: "D", color: "rgba(240,240,245,.3)", bg: "rgba(255,255,255,.03)", border: "rgba(255,255,255,.06)" };
 }
 
@@ -75,6 +75,11 @@ export default function ScreenerClient() {
   const [refreshing, setRefreshing] = useState(false);
   const [view, setView] = useState("feed"); // feed | grid
   const [selectedItem, setSelectedItem] = useState(null);
+  const [newCount, setNewCount] = useState(0);
+
+  // ── Upvote state ──
+  const [voterId, setVoterId] = useState(null);
+  const [userVotes, setUserVotes] = useState(new Set());
 
   const supabase = useMemo(() => getSupabase(), []);
 
@@ -113,6 +118,7 @@ export default function ScreenerClient() {
     return () => clearInterval(i);
   }, []);
 
+  // ── Realtime subscription ──
   useEffect(() => {
     if (!supabase) return;
     const ch = supabase.channel("scanner-realtime")
@@ -124,6 +130,7 @@ export default function ScreenerClient() {
             return [p.new, ...prev].slice(0, 300);
           });
           setStats((prev) => ({ today: prev.today + 1, this_hour: prev.this_hour + 1 }));
+          setNewCount((prev) => prev + 1);
         })
       .subscribe((status) => {
         if (status === "SUBSCRIBED") console.log("[Screener] Realtime connected");
@@ -147,6 +154,52 @@ export default function ScreenerClient() {
     document.body.style.overflow = selectedItem ? "hidden" : "";
     return () => { document.body.style.overflow = ""; };
   }, [selectedItem]);
+
+  // ── Voter fingerprint init ──
+  useEffect(() => {
+    let id = localStorage.getItem("as_voter_id");
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem("as_voter_id", id);
+    }
+    setVoterId(id);
+    fetch(`/api/vote?voter_id=${id}`)
+      .then((r) => r.json())
+      .then((d) => { if (d.votes) setUserVotes(new Set(d.votes)); })
+      .catch(() => {});
+  }, []);
+
+  // ── Vote handler (optimistic) ──
+  const handleVote = useCallback(async (e, discoveryId) => {
+    e.stopPropagation();
+    if (!voterId) return;
+    const wasVoted = userVotes.has(discoveryId);
+    setUserVotes((prev) => {
+      const n = new Set(prev);
+      wasVoted ? n.delete(discoveryId) : n.add(discoveryId);
+      return n;
+    });
+    setDiscoveries((prev) =>
+      prev.map((d) => d.id === discoveryId ? { ...d, upvotes: (d.upvotes || 0) + (wasVoted ? -1 : 1) } : d)
+    );
+    try {
+      const r = await fetch("/api/vote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ discovery_id: discoveryId, voter_id: voterId }),
+      });
+      if (!r.ok) throw new Error();
+    } catch {
+      setUserVotes((prev) => {
+        const n = new Set(prev);
+        wasVoted ? n.add(discoveryId) : n.delete(discoveryId);
+        return n;
+      });
+      setDiscoveries((prev) =>
+        prev.map((d) => d.id === discoveryId ? { ...d, upvotes: (d.upvotes || 0) + (wasVoted ? 1 : -1) } : d)
+      );
+    }
+  }, [voterId, userVotes]);
 
   const catCounts = useMemo(() => {
     const c = {};
@@ -172,7 +225,7 @@ export default function ScreenerClient() {
   }, [discoveries]);
 
   return (
-    <div style={{ "--bg": "#0C0D12", "--s1": "#13151D", "--s2": "#1A1D28", "--b1": "rgba(255,255,255,.08)", "--b2": "rgba(255,255,255,.12)", "--b3": "rgba(255,255,255,.18)", "--t1": "#F2F2F7", "--t2": "rgba(242,242,247,.65)", "--t3": "rgba(242,242,247,.38)", "--g": "#3B82F6", "--gg": "rgba(59,130,246,.2)", "--gd": "rgba(59,130,246,.08)", "--em": "#10B981", "--m": "'SF Mono', 'JetBrains Mono', 'Fira Code', monospace", "--f": "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif", minHeight: "100vh", background: "var(--bg)", color: "var(--t1)", fontFamily: "var(--f)" }}>
+    <div style={{ "--bg": "#0A0B10", "--s1": "#12141C", "--s2": "#1A1D28", "--b1": "rgba(0,255,170,.06)", "--b2": "rgba(0,255,170,.12)", "--b3": "rgba(0,255,170,.18)", "--t1": "#F2F2F7", "--t2": "rgba(242,242,247,.65)", "--t3": "rgba(242,242,247,.38)", "--g": "#00FFAA", "--gg": "rgba(0,255,170,.2)", "--gd": "rgba(0,255,170,.08)", "--em": "#00FFAA", "--m": "'SF Mono', 'JetBrains Mono', 'Fira Code', monospace", "--f": "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif", minHeight: "100vh", background: "var(--bg)", color: "var(--t1)", fontFamily: "var(--f)" }}>
 
       <style suppressHydrationWarning>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
@@ -180,21 +233,25 @@ export default function ScreenerClient() {
         @keyframes fi-scale { from { opacity: 0; transform: scale(.96) } to { opacity: 1; transform: scale(1) } }
         @keyframes lp { 0%,100% { opacity: .35 } 50% { opacity: 1 } }
         @keyframes sl { 0% { transform: translateX(-100%) } 100% { transform: translateX(200%) } }
-        @keyframes glow-pulse { 0%,100% { box-shadow: 0 0 20px rgba(59,130,246,.08) } 50% { box-shadow: 0 0 40px rgba(59,130,246,.15) } }
+        @keyframes glow-pulse { 0%,100% { box-shadow: 0 0 20px rgba(0,255,170,.1) } 50% { box-shadow: 0 0 40px rgba(0,255,170,.2) } }
         @keyframes scan-line { 0% { transform: translateX(-100%) } 100% { transform: translateX(200%) } }
         @keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
         @keyframes float { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-6px) } }
         @keyframes ring-rotate { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
         @keyframes fade-in { from { opacity: 0 } to { opacity: 1 } }
         @keyframes slide-in-right { from { transform: translateX(100%) } to { transform: translateX(0) } }
+        @keyframes new-glow { 0%,100% { box-shadow: inset 3px 0 12px -4px rgba(0,255,170,.08) } 50% { box-shadow: inset 3px 0 12px -4px rgba(0,255,170,.25) } }
+        @keyframes vote-pop { 0% { transform: scale(1) } 50% { transform: scale(1.3) } 100% { transform: scale(1) } }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        ::selection { background: rgba(59,130,246,.3); }
+        ::selection { background: rgba(0,255,170,.25); }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.15); }
-        .card { transition: all .2s cubic-bezier(.4,0,.2,1); border: 1px solid var(--b1); cursor: pointer; }
-        .card:hover { border-color: var(--b2); transform: translateY(-1px); box-shadow: 0 8px 32px rgba(0,0,0,.3), 0 0 0 1px rgba(255,255,255,.04); }
+        .card { transition: all .2s cubic-bezier(.4,0,.2,1); border: 1px solid var(--b1); border-left: 2px solid transparent; cursor: pointer; position: relative; }
+        .card:hover { border-left-color: var(--g); background: rgba(0,255,170,.015) !important; box-shadow: inset 0 1px 0 0 rgba(0,255,170,.08), 0 4px 24px rgba(0,0,0,.2); }
+        .card::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--g), transparent); opacity: 0; transition: opacity .25s; pointer-events: none; }
+        .card:hover::after { opacity: .5; }
         .pill { transition: all .15s; cursor: pointer; user-select: none; }
         .pill:hover { background: rgba(255,255,255,.06) !important; }
         .pill.on { background: var(--gd) !important; border-color: var(--gg) !important; color: var(--g) !important; }
@@ -203,44 +260,51 @@ export default function ScreenerClient() {
         .ghost-btn { transition: all .15s; cursor: pointer; border: 1px solid var(--b1); background: transparent; }
         .ghost-btn:hover { background: rgba(255,255,255,.04); border-color: var(--b2); }
         .stat-card { background: var(--s1); border: 1px solid var(--b1); border-radius: 10px; padding: 14px 18px; position: relative; overflow: hidden; }
-        .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,.06), transparent); }
+        .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(0,255,170,.08), transparent); }
         .detail-panel::-webkit-scrollbar { width: 4px; }
         .detail-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 2px; }
+        .vote-btn { transition: all .15s; cursor: pointer; border: none; background: transparent; }
+        .vote-btn:hover { background: rgba(0,255,170,.06) !important; }
+        .vote-btn:active .vote-arrow { animation: vote-pop .2s ease; }
       `}</style>
 
       {/* ─── Ambient Background ─── */}
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
-        <div style={{ position: "absolute", top: "-20%", left: "20%", width: "40vw", height: "40vw", borderRadius: "50%", background: "radial-gradient(circle, rgba(59,130,246,.04) 0%, transparent 70%)", filter: "blur(60px)" }} />
-        <div style={{ position: "absolute", top: "30%", right: "10%", width: "30vw", height: "30vw", borderRadius: "50%", background: "radial-gradient(circle, rgba(139,92,246,.03) 0%, transparent 70%)", filter: "blur(60px)" }} />
-        <div style={{ position: "absolute", bottom: "10%", left: "40%", width: "35vw", height: "35vw", borderRadius: "50%", background: "radial-gradient(circle, rgba(16,185,129,.02) 0%, transparent 70%)", filter: "blur(60px)" }} />
-        <div style={{ position: "absolute", inset: 0, opacity: 0.015, backgroundImage: "linear-gradient(rgba(255,255,255,.15) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.15) 1px, transparent 1px)", backgroundSize: "60px 60px" }} />
+        <div style={{ position: "absolute", top: "-20%", left: "20%", width: "40vw", height: "40vw", borderRadius: "50%", background: "radial-gradient(circle, rgba(0,255,170,.04) 0%, transparent 70%)", filter: "blur(60px)" }} />
+        <div style={{ position: "absolute", top: "30%", right: "10%", width: "30vw", height: "30vw", borderRadius: "50%", background: "radial-gradient(circle, rgba(167,139,250,.03) 0%, transparent 70%)", filter: "blur(60px)" }} />
+        <div style={{ position: "absolute", bottom: "10%", left: "40%", width: "35vw", height: "35vw", borderRadius: "50%", background: "radial-gradient(circle, rgba(0,255,170,.02) 0%, transparent 70%)", filter: "blur(60px)" }} />
+        <div style={{ position: "absolute", inset: 0, opacity: 0.03, backgroundImage: "radial-gradient(circle, rgba(0,255,170,.5) 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
       </div>
 
       {/* ─── HEADER ─── */}
-      <header style={{ padding: "0 32px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--b1)", background: "rgba(12,13,18,.88)", backdropFilter: "blur(24px) saturate(180%)", position: "sticky", top: 0, zIndex: 100 }}>
+      <header style={{ padding: "0 32px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--b1)", background: "rgba(10,11,16,.88)", backdropFilter: "blur(24px) saturate(180%)", position: "sticky", top: 0, zIndex: 100 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <a href="/dashboard" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none", color: "var(--t1)" }}>
-            <div style={{ width: 30, height: 30, borderRadius: 8, position: "relative", overflow: "hidden", background: "linear-gradient(135deg, #3B82F6, #2563EB, #1D4ED8)", display: "flex", alignItems: "center", justifyContent: "center", animation: "glow-pulse 4s ease-in-out infinite" }}>
-              <span style={{ fontSize: 11, fontWeight: 800, color: "#FFF", fontFamily: "var(--m)", letterSpacing: ".02em" }}>AS</span>
-              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, transparent, rgba(255,255,255,.2), transparent)", animation: "sl 4s ease-in-out infinite" }} />
+            <div style={{ width: 30, height: 30, borderRadius: 8, position: "relative", overflow: "hidden", background: "linear-gradient(135deg, #00FFAA, #00CC88, #00AA77)", display: "flex", alignItems: "center", justifyContent: "center", animation: "glow-pulse 4s ease-in-out infinite" }}>
+              <span style={{ fontSize: 11, fontWeight: 800, color: "#0A0B10", fontFamily: "var(--m)", letterSpacing: ".02em" }}>AS</span>
+              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent)", animation: "sl 4s ease-in-out infinite" }} />
             </div>
             <span style={{ fontSize: 15, fontWeight: 800, fontFamily: "var(--m)", letterSpacing: "-.02em" }}>
               AGENT<span style={{ color: "var(--g)" }}>SCREENER</span>
             </span>
           </a>
           <div style={{ height: 20, width: 1, background: "var(--b2)" }} />
-          <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: "var(--g)", letterSpacing: ".06em", padding: "3px 10px", borderRadius: 6, background: "var(--gd)", border: "1px solid rgba(59,130,246,.15)" }}>SCREENER</span>
+          <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: "var(--g)", letterSpacing: ".06em", padding: "3px 10px", borderRadius: 4, background: "var(--gd)", border: "1px solid rgba(0,255,170,.15)" }}>SCREENER</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "4px 12px", borderRadius: 20, background: "rgba(16,185,129,.06)", border: "1px solid rgba(16,185,129,.15)" }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#10B981", animation: "lp 2s ease-in-out infinite", boxShadow: "0 0 8px rgba(16,185,129,.5)" }} />
-            <span style={{ fontSize: 10, fontWeight: 700, color: "#10B981", fontFamily: "var(--m)", letterSpacing: ".04em" }}>LIVE</span>
+          {/* Scanning indicator */}
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 14px", borderRadius: 4, background: "rgba(0,255,170,.04)", border: "1px solid rgba(0,255,170,.1)" }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#00FFAA", animation: "lp 1.5s ease-in-out infinite", boxShadow: "0 0 8px rgba(0,255,170,.5)" }} />
+            <span style={{ fontSize: 10, fontWeight: 700, color: "#00FFAA", fontFamily: "var(--m)", letterSpacing: ".04em" }}>SCANNING</span>
+            <div style={{ width: 40, height: 3, borderRadius: 1, background: "rgba(0,255,170,.1)", overflow: "hidden" }}>
+              <div style={{ width: "30%", height: "100%", background: "linear-gradient(90deg, transparent, #00FFAA, transparent)", animation: "scan-line 2s ease-in-out infinite" }} />
+            </div>
           </div>
-          <button className="ghost-btn" onClick={handleRefresh} disabled={refreshing} style={{ padding: "6px 14px", borderRadius: 8, color: "var(--t2)", fontSize: 12, fontWeight: 600, fontFamily: "var(--f)", display: "flex", alignItems: "center", gap: 6, opacity: refreshing ? 0.5 : 1 }}>
+          <button className="ghost-btn" onClick={handleRefresh} disabled={refreshing} style={{ padding: "6px 14px", borderRadius: 6, color: "var(--t2)", fontSize: 12, fontWeight: 600, fontFamily: "var(--m)", display: "flex", alignItems: "center", gap: 6, opacity: refreshing ? 0.5 : 1 }}>
             <span style={{ display: "inline-block", fontSize: 14, animation: refreshing ? "spin .5s linear infinite" : "none" }}>⟳</span>
             Refresh
           </button>
-          <a href="/dashboard" className="link-hover" style={{ padding: "6px 14px", borderRadius: 8, border: "1px solid var(--b1)", color: "var(--t2)", fontSize: 12, fontWeight: 600 }}>Dashboard</a>
+          <a href="/dashboard" className="link-hover" style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid var(--b1)", color: "var(--t2)", fontSize: 12, fontWeight: 600 }}>Dashboard</a>
         </div>
       </header>
 
@@ -248,21 +312,21 @@ export default function ScreenerClient() {
       <div style={{ padding: "20px 32px", position: "relative", zIndex: 1 }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
           {[
-            { label: "Detected Today", value: stats.today, icon: "◈", color: "#3B82F6" },
-            { label: "This Hour", value: stats.this_hour, icon: "⏱", color: "#10B981" },
-            { label: "In Feed", value: filtered.length, icon: "◉", color: "#8B5CF6" },
-            { label: "Sources Active", value: sourceCount || 11, icon: "⊛", color: "#F59E0B" },
+            { label: "Detected Today", value: stats.today, icon: "◈", color: "#00FFAA" },
+            { label: "This Hour", value: stats.this_hour, icon: "⏱", color: "#A78BFA" },
+            { label: "In Feed", value: filtered.length, icon: "◉", color: "#38BDF8" },
+            { label: "Sources Active", value: sourceCount || 11, icon: "⊛", color: "#FBBF24" },
           ].map((s, i) => (
             <div key={i} className="stat-card" style={{ animation: `fi .4s ease ${i * 0.06}s both` }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div>
-                  <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--t3)", marginBottom: 6 }}>{s.label}</div>
+                  <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--t3)", marginBottom: 6, fontFamily: "var(--m)" }}>{s.label}</div>
                   <div style={{ fontSize: 28, fontWeight: 800, fontFamily: "var(--m)", color: "var(--t1)", letterSpacing: "-.02em", lineHeight: 1 }}>{s.value}</div>
                 </div>
                 <span style={{ fontSize: 18, color: s.color, opacity: 0.5 }}>{s.icon}</span>
               </div>
-              <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: 2, background: "var(--b1)", overflow: "hidden", borderRadius: "0 0 10px 10px" }}>
-                <div style={{ width: "30%", height: "100%", background: `linear-gradient(90deg, transparent, ${s.color}, transparent)`, animation: "scan-line 3s ease-in-out infinite", animationDelay: `${i * 0.5}s` }} />
+              <div style={{ marginTop: 10, height: 2, borderRadius: 1, background: "rgba(255,255,255,.04)" }}>
+                <div style={{ width: `${Math.min((s.value / Math.max(stats.today || 1, 1)) * 100, 100)}%`, height: "100%", background: s.color, borderRadius: 1, transition: "width .5s ease", minWidth: s.value > 0 ? "4%" : "0%" }} />
               </div>
             </div>
           ))}
@@ -272,26 +336,41 @@ export default function ScreenerClient() {
       {/* ─── TOOLBAR ─── */}
       <div style={{ padding: "0 32px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, position: "relative", zIndex: 1 }}>
         <div style={{ display: "flex", gap: 6, alignItems: "center", overflowX: "auto", maxWidth: "65%", paddingBottom: 2 }}>
-          <button className={`pill${catFilter === "All" ? " on" : ""}`} onClick={() => setCatFilter("All")} style={{ padding: "6px 14px", borderRadius: 20, border: "1px solid var(--b1)", fontSize: 12, fontWeight: 600, fontFamily: "var(--f)", color: "var(--t2)", whiteSpace: "nowrap", background: "transparent" }}>All</button>
+          <button className={`pill${catFilter === "All" ? " on" : ""}`} onClick={() => setCatFilter("All")} style={{ padding: "6px 14px", borderRadius: 4, border: "1px solid var(--b1)", fontSize: 12, fontWeight: 600, fontFamily: "var(--m)", color: "var(--t2)", whiteSpace: "nowrap", background: "transparent" }}>All</button>
           {topCats.map((cat) => (
-            <button key={cat} className={`pill${catFilter === cat ? " on" : ""}`} onClick={() => setCatFilter(catFilter === cat ? "All" : cat)} style={{ padding: "6px 14px", borderRadius: 20, border: "1px solid var(--b1)", fontSize: 12, fontWeight: 600, fontFamily: "var(--f)", color: "var(--t2)", whiteSpace: "nowrap", background: "transparent" }}>
+            <button key={cat} className={`pill${catFilter === cat ? " on" : ""}`} onClick={() => setCatFilter(catFilter === cat ? "All" : cat)} style={{ padding: "6px 14px", borderRadius: 4, border: "1px solid var(--b1)", fontSize: 12, fontWeight: 600, fontFamily: "var(--m)", color: "var(--t2)", whiteSpace: "nowrap", background: "transparent" }}>
               {cat}
-              <span style={{ marginLeft: 5, fontSize: 10, opacity: 0.5 }}>{catCounts[cat]}</span>
+              <span style={{ marginLeft: 5, fontSize: 10, opacity: 0.5, fontFamily: "var(--m)" }}>{catCounts[cat]}</span>
             </button>
           ))}
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ position: "relative" }}>
             <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "var(--t3)", pointerEvents: "none" }}>⌕</span>
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search products..." style={{ width: 220, padding: "8px 12px 8px 32px", fontSize: 12, borderRadius: 10, border: "1px solid var(--b1)", background: "var(--s1)", color: "var(--t1)", outline: "none", fontFamily: "var(--f)", transition: "border-color .15s" }} onFocus={(e) => e.target.style.borderColor = "var(--b2)"} onBlur={(e) => e.target.style.borderColor = "var(--b1)"} />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search products..." style={{ width: 220, padding: "8px 12px 8px 32px", fontSize: 12, borderRadius: 6, border: "1px solid var(--b1)", background: "var(--s1)", color: "var(--t1)", outline: "none", fontFamily: "var(--m)", transition: "border-color .15s" }} onFocus={(e) => e.target.style.borderColor = "var(--b2)"} onBlur={(e) => e.target.style.borderColor = "var(--b1)"} />
           </div>
-          <div style={{ display: "flex", borderRadius: 8, border: "1px solid var(--b1)", overflow: "hidden" }}>
+          <div style={{ display: "flex", borderRadius: 4, border: "1px solid var(--b1)", overflow: "hidden" }}>
             {["feed", "grid"].map((v) => (
-              <button key={v} onClick={() => setView(v)} style={{ padding: "6px 10px", border: "none", background: view === v ? "rgba(255,255,255,.06)" : "transparent", color: view === v ? "var(--t1)" : "var(--t3)", fontSize: 12, cursor: "pointer", transition: "all .12s" }}>{v === "feed" ? "☰" : "⊞"}</button>
+              <button key={v} onClick={() => setView(v)} style={{ padding: "6px 10px", border: "none", background: view === v ? "rgba(0,255,170,.06)" : "transparent", color: view === v ? "var(--g)" : "var(--t3)", fontSize: 12, cursor: "pointer", transition: "all .12s", fontFamily: "var(--m)" }}>{v === "feed" ? "☰" : "⊞"}</button>
             ))}
           </div>
         </div>
       </div>
+
+      {/* ─── NEW PRODUCTS BANNER ─── */}
+      {newCount > 0 && (
+        <div style={{ position: "sticky", top: 56, zIndex: 50, margin: "0 32px 12px", padding: "10px 20px", borderRadius: 6, background: "rgba(0,255,170,.04)", border: "1px solid rgba(0,255,170,.12)", display: "flex", alignItems: "center", justifyContent: "space-between", backdropFilter: "blur(12px)", animation: "fi .3s ease" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#00FFAA", animation: "lp 1.5s ease-in-out infinite" }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#00FFAA", fontFamily: "var(--m)" }}>
+              {newCount} new product{newCount > 1 ? "s" : ""} discovered
+            </span>
+          </div>
+          <button onClick={() => { setNewCount(0); window.scrollTo({ top: 0, behavior: "smooth" }); }} style={{ padding: "5px 14px", borderRadius: 4, border: "1px solid rgba(0,255,170,.2)", background: "rgba(0,255,170,.08)", color: "#00FFAA", fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", cursor: "pointer", letterSpacing: ".04em" }}>
+            SHOW ↑
+          </button>
+        </div>
+      )}
 
       {/* ─── FEED / GRID ─── */}
       <div style={{ padding: "0 32px 60px", position: "relative", zIndex: 1 }}>
@@ -299,11 +378,11 @@ export default function ScreenerClient() {
           <EmptyState />
         ) : view === "feed" ? (
           <div style={{ maxWidth: 900, margin: "0 auto" }}>
-            {filtered.map((d, i) => <FeedCard key={d.id || d.external_id} item={d} index={i} onSelect={setSelectedItem} />)}
+            {filtered.map((d, i) => <FeedCard key={d.id || d.external_id} item={d} index={i} onSelect={setSelectedItem} voted={userVotes.has(d.id)} onVote={handleVote} />)}
           </div>
         ) : (
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 12 }}>
-            {filtered.map((d, i) => <GridCard key={d.id || d.external_id} item={d} index={i} onSelect={setSelectedItem} />)}
+            {filtered.map((d, i) => <GridCard key={d.id || d.external_id} item={d} index={i} onSelect={setSelectedItem} voted={userVotes.has(d.id)} onVote={handleVote} />)}
           </div>
         )}
       </div>
@@ -319,25 +398,68 @@ export default function ScreenerClient() {
       </footer>
 
       {/* ─── DETAIL PANEL ─── */}
-      {selectedItem && <DetailPanel item={selectedItem} onClose={() => setSelectedItem(null)} />}
+      {selectedItem && <DetailPanel item={selectedItem} onClose={() => setSelectedItem(null)} voted={userVotes.has(selectedItem.id)} onVote={handleVote} />}
     </div>
   );
 }
 
+// ─── Upvote Button ───
+function UpvoteButton({ item, voted, onVote, size = "sm" }) {
+  const isLg = size === "lg";
+  return (
+    <button
+      className="vote-btn"
+      onClick={(e) => onVote(e, item.id)}
+      style={{
+        display: "flex", flexDirection: "column", alignItems: "center", gap: 1,
+        padding: isLg ? "8px 14px" : "4px 8px", borderRadius: 4,
+        border: `1px solid ${voted ? "rgba(0,255,170,.25)" : "rgba(255,255,255,.06)"}`,
+        background: voted ? "rgba(0,255,170,.08)" : "transparent",
+        minWidth: isLg ? 48 : 36,
+      }}
+    >
+      <span className="vote-arrow" style={{
+        fontSize: isLg ? 16 : 12, lineHeight: 1,
+        color: voted ? "#00FFAA" : "var(--t3)",
+        transition: "color .15s",
+      }}>
+        {voted ? "▲" : "△"}
+      </span>
+      <span style={{
+        fontSize: isLg ? 12 : 10, fontWeight: 700, fontFamily: "var(--m)",
+        color: voted ? "#00FFAA" : "var(--t3)",
+        transition: "color .15s",
+      }}>
+        {item.upvotes || 0}
+      </span>
+    </button>
+  );
+}
+
 // ─── Feed Card (list view) ───
-function FeedCard({ item, index, onSelect }) {
+function FeedCard({ item, index, onSelect, voted, onVote }) {
   const confidence = Math.round((item.ai_confidence || 0) * 100);
   const grade = confidenceGrade(confidence);
   const age = item.discovered_at ? timeAgo(item.discovered_at) : "—";
+  const isVeryNew = item.discovered_at && (Date.now() - new Date(item.discovered_at).getTime()) < 120_000;
   const isNew = item.discovered_at && (Date.now() - new Date(item.discovered_at).getTime()) < 600_000;
   const repoPath = extractRepoPath(item);
 
   return (
-    <div className="card" onClick={() => onSelect?.(item)} style={{ padding: "16px 20px", borderRadius: 12, background: "var(--s1)", marginBottom: 8, animation: `fi .35s ease ${Math.min(index * 0.04, 0.6)}s both` }}>
+    <div className="card" onClick={() => onSelect?.(item)} style={{
+      padding: "16px 20px", borderRadius: 6, background: "var(--s1)", marginBottom: 8,
+      animation: `fi .35s ease ${Math.min(index * 0.04, 0.6)}s both`,
+      borderLeftColor: isVeryNew ? "#00FFAA" : undefined,
+      ...(isVeryNew ? { animation: `fi .35s ease ${Math.min(index * 0.04, 0.6)}s both, new-glow 2s ease-in-out infinite` } : {}),
+    }}>
       <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-        {/* Confidence badge */}
-        <div style={{ width: 40, height: 40, borderRadius: 10, background: grade.bg, border: `1px solid ${grade.border}`, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-          <span style={{ fontSize: 16, fontWeight: 800, fontFamily: "var(--m)", color: grade.color }}>{grade.label}</span>
+        {/* Confidence bar */}
+        <div style={{ width: 44, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, flexShrink: 0, paddingTop: 2 }}>
+          <span style={{ fontSize: 13, fontWeight: 800, fontFamily: "var(--m)", color: grade.color }}>{grade.label}</span>
+          <div style={{ width: "100%", height: 3, borderRadius: 1, background: "rgba(255,255,255,.06)", overflow: "hidden" }}>
+            <div style={{ width: `${confidence}%`, height: "100%", background: grade.color, borderRadius: 1, transition: "width .3s ease" }} />
+          </div>
+          <span style={{ fontSize: 8, fontFamily: "var(--m)", color: "var(--t3)" }}>{confidence}%</span>
         </div>
 
         {/* Content */}
@@ -345,7 +467,7 @@ function FeedCard({ item, index, onSelect }) {
           {/* Title row */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2, flexWrap: "wrap" }}>
             <span style={{ fontSize: 15, fontWeight: 700, color: "var(--t1)", letterSpacing: "-.01em" }}>{formatName(item.name)}</span>
-            {isNew && <span style={{ fontSize: 9, fontWeight: 700, padding: "2px 7px", borderRadius: 10, background: "rgba(16,185,129,.1)", border: "1px solid rgba(16,185,129,.2)", color: "#10B981", letterSpacing: ".04em", animation: "lp 3s ease-in-out infinite" }}>NEW</span>}
+            {isNew && <span style={{ fontSize: 8, fontWeight: 800, fontFamily: "var(--m)", color: "#00FFAA", letterSpacing: ".06em" }}>NEW</span>}
           </div>
 
           {/* Subtitle */}
@@ -367,22 +489,22 @@ function FeedCard({ item, index, onSelect }) {
           {/* Metadata row */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             {item.category && (
-              <span style={{ padding: "3px 10px", borderRadius: 6, background: "var(--gd)", border: "1px solid rgba(59,130,246,.12)", fontSize: 11, fontWeight: 600, color: "var(--g)" }}>{item.category}</span>
+              <span style={{ padding: "3px 10px", borderRadius: 4, background: "var(--gd)", border: "1px solid rgba(0,255,170,.12)", fontSize: 11, fontWeight: 600, color: "var(--g)", fontFamily: "var(--m)" }}>{item.category}</span>
             )}
             {item.language && (
-              <span style={{ padding: "3px 10px", borderRadius: 6, background: "rgba(255,255,255,.03)", border: "1px solid var(--b1)", fontSize: 11, fontWeight: 600, color: "var(--t2)" }}>{item.language}</span>
+              <span style={{ padding: "3px 10px", borderRadius: 4, background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.06)", fontSize: 11, fontWeight: 600, color: "var(--t2)", fontFamily: "var(--m)" }}>{item.language}</span>
             )}
             {item.stars > 0 && <span style={{ fontSize: 11, fontWeight: 600, color: "var(--t3)", fontFamily: "var(--m)" }}>★ {fmtN(item.stars)}</span>}
             {item.downloads > 0 && <span style={{ fontSize: 11, fontWeight: 600, color: "var(--t3)", fontFamily: "var(--m)" }}>↓ {fmtN(item.downloads)}</span>}
-            {item.upvotes > 0 && <span style={{ fontSize: 11, fontWeight: 600, color: "var(--t3)", fontFamily: "var(--m)" }}>▲ {item.upvotes}</span>}
             <span style={{ fontSize: 11, color: "var(--t3)" }}>·</span>
             {item.url && <a href={item.url} target="_blank" rel="noopener noreferrer" className="link-hover" onClick={(e) => e.stopPropagation()} style={{ fontSize: 11, fontWeight: 500, color: "var(--t3)" }}>{sourceLabel(item.url)} ↗</a>}
           </div>
         </div>
 
-        {/* Right: time */}
-        <div style={{ textAlign: "right", flexShrink: 0 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: isNew ? "#10B981" : "var(--t3)", fontFamily: "var(--m)" }}>{age}</div>
+        {/* Right column: upvote + time */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
+          <UpvoteButton item={item} voted={voted} onVote={onVote} />
+          <div style={{ fontSize: 11, fontWeight: 600, color: isNew ? "#00FFAA" : "var(--t3)", fontFamily: "var(--m)" }}>{age}</div>
         </div>
       </div>
     </div>
@@ -390,25 +512,30 @@ function FeedCard({ item, index, onSelect }) {
 }
 
 // ─── Grid Card ───
-function GridCard({ item, index, onSelect }) {
+function GridCard({ item, index, onSelect, voted, onVote }) {
   const confidence = Math.round((item.ai_confidence || 0) * 100);
   const grade = confidenceGrade(confidence);
+  const isVeryNew = item.discovered_at && (Date.now() - new Date(item.discovered_at).getTime()) < 120_000;
   const isNew = item.discovered_at && (Date.now() - new Date(item.discovered_at).getTime()) < 600_000;
 
   return (
-    <div className="card" onClick={() => onSelect?.(item)} style={{ padding: "18px 20px", borderRadius: 14, background: "var(--s1)", animation: `fi-scale .3s ease ${Math.min(index * 0.04, 0.5)}s both` }}>
+    <div className="card" onClick={() => onSelect?.(item)} style={{
+      padding: "18px 20px", borderRadius: 8, background: "var(--s1)",
+      animation: `fi-scale .3s ease ${Math.min(index * 0.04, 0.5)}s both`,
+      borderLeftColor: isVeryNew ? "#00FFAA" : undefined,
+    }}>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 9, background: grade.bg, border: `1px solid ${grade.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ width: 36, height: 36, borderRadius: 6, background: grade.bg, border: `1px solid ${grade.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <span style={{ fontSize: 14, fontWeight: 800, fontFamily: "var(--m)", color: grade.color }}>{grade.label}</span>
           </div>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <span style={{ fontSize: 14, fontWeight: 700, color: "var(--t1)", letterSpacing: "-.01em" }}>{formatName(item.name)}</span>
-              {isNew && <span style={{ fontSize: 8, fontWeight: 700, padding: "1px 6px", borderRadius: 8, background: "rgba(16,185,129,.1)", color: "#10B981" }}>NEW</span>}
+              {isNew && <span style={{ fontSize: 8, fontWeight: 800, fontFamily: "var(--m)", color: "#00FFAA", letterSpacing: ".06em" }}>NEW</span>}
             </div>
-            <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 1 }}>{formatSubtitle(item)}</div>
+            <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 1, fontFamily: "var(--m)" }}>{formatSubtitle(item)}</div>
           </div>
         </div>
         <div style={{ textAlign: "right" }}>
@@ -422,31 +549,31 @@ function GridCard({ item, index, onSelect }) {
       )}
 
       {/* Metrics bar */}
-      <div style={{ display: "flex", gap: 8, marginBottom: 14, padding: "10px 14px", borderRadius: 9, background: "rgba(255,255,255,.02)", border: "1px solid var(--b1)" }}>
+      <div style={{ display: "flex", gap: 8, marginBottom: 14, padding: "10px 14px", borderRadius: 6, background: "rgba(255,255,255,.02)", border: "1px solid rgba(255,255,255,.06)" }}>
         {[
           item.stars > 0 && { label: "Stars", value: fmtN(item.stars) },
           item.downloads > 0 && { label: "Downloads", value: fmtN(item.downloads) },
-          item.upvotes > 0 && { label: "Upvotes", value: String(item.upvotes) },
           item.language && { label: "Language", value: item.language },
         ].filter(Boolean).slice(0, 3).map((m, i) => (
           <div key={i} style={{ flex: 1 }}>
-            <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--t3)", marginBottom: 2 }}>{m.label}</div>
+            <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--t3)", marginBottom: 2, fontFamily: "var(--m)" }}>{m.label}</div>
             <div style={{ fontSize: 13, fontWeight: 700, fontFamily: "var(--m)", color: "var(--t1)" }}>{m.value}</div>
           </div>
         ))}
-        {![item.stars, item.downloads, item.upvotes].some(v => v > 0) && !item.language && (
-          <div style={{ flex: 1, fontSize: 10, color: "var(--t3)", fontStyle: "italic" }}>Newly detected</div>
+        {![item.stars, item.downloads].some(v => v > 0) && !item.language && (
+          <div style={{ flex: 1, fontSize: 10, color: "var(--t3)", fontStyle: "italic", fontFamily: "var(--m)" }}>Newly detected</div>
         )}
       </div>
 
       {/* Footer */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ display: "flex", gap: 6 }}>
-          {item.category && <span style={{ padding: "3px 10px", borderRadius: 6, background: "var(--gd)", border: "1px solid rgba(59,130,246,.12)", fontSize: 10, fontWeight: 600, color: "var(--g)" }}>{item.category}</span>}
+        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          {item.category && <span style={{ padding: "3px 10px", borderRadius: 4, background: "var(--gd)", border: "1px solid rgba(0,255,170,.12)", fontSize: 10, fontWeight: 600, color: "var(--g)", fontFamily: "var(--m)" }}>{item.category}</span>}
+          <UpvoteButton item={item} voted={voted} onVote={onVote} />
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          {item.url && <a href={item.url} target="_blank" rel="noopener noreferrer" className="link-hover" onClick={(e) => e.stopPropagation()} style={{ fontSize: 10, fontWeight: 600, color: "var(--t3)", padding: "3px 8px", borderRadius: 6, border: "1px solid var(--b1)" }}>{sourceLabel(item.url)} ↗</a>}
-          {item.author_url && <a href={item.author_url} target="_blank" rel="noopener noreferrer" className="link-hover" onClick={(e) => e.stopPropagation()} style={{ fontSize: 10, fontWeight: 600, color: "var(--t3)", padding: "3px 8px", borderRadius: 6, border: "1px solid var(--b1)" }}>Profile</a>}
+          {item.url && <a href={item.url} target="_blank" rel="noopener noreferrer" className="link-hover" onClick={(e) => e.stopPropagation()} style={{ fontSize: 10, fontWeight: 600, color: "var(--t3)", padding: "3px 8px", borderRadius: 4, border: "1px solid rgba(255,255,255,.06)" }}>{sourceLabel(item.url)} ↗</a>}
+          {item.author_url && <a href={item.author_url} target="_blank" rel="noopener noreferrer" className="link-hover" onClick={(e) => e.stopPropagation()} style={{ fontSize: 10, fontWeight: 600, color: "var(--t3)", padding: "3px 8px", borderRadius: 4, border: "1px solid rgba(255,255,255,.06)" }}>Profile</a>}
         </div>
       </div>
     </div>
@@ -454,7 +581,7 @@ function GridCard({ item, index, onSelect }) {
 }
 
 // ─── Detail Panel (slide-out from right) ───
-function DetailPanel({ item, onClose }) {
+function DetailPanel({ item, onClose, voted, onVote }) {
   if (!item) return null;
 
   const confidence = Math.round((item.ai_confidence || 0) * 100);
@@ -466,7 +593,6 @@ function DetailPanel({ item, onClose }) {
     { label: "Stars", value: fmtN(item.stars), show: item.stars > 0 },
     { label: "Forks", value: fmtN(item.forks), show: item.forks > 0 },
     { label: "Downloads", value: fmtN(item.downloads), show: item.downloads > 0 },
-    { label: "Upvotes", value: String(item.upvotes), show: item.upvotes > 0 },
     { label: "Language", value: item.language, show: !!item.language },
     { label: "License", value: item.license, show: !!item.license },
   ].filter((m) => m.show);
@@ -477,55 +603,58 @@ function DetailPanel({ item, onClose }) {
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", backdropFilter: "blur(4px)", zIndex: 200, animation: "fade-in .2s ease" }} />
 
       {/* Panel */}
-      <div className="detail-panel" style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 460, maxWidth: "90vw", background: "#13151D", borderLeft: "1px solid rgba(255,255,255,.08)", zIndex: 201, overflowY: "auto", animation: "slide-in-right .25s cubic-bezier(.4,0,.2,1)", boxShadow: "-20px 0 60px rgba(0,0,0,.4)" }}>
+      <div className="detail-panel" style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 460, maxWidth: "90vw", background: "#12141C", borderLeft: "1px solid rgba(0,255,170,.08)", zIndex: 201, overflowY: "auto", animation: "slide-in-right .25s cubic-bezier(.4,0,.2,1)", boxShadow: "-20px 0 60px rgba(0,0,0,.4)" }}>
 
         {/* Header */}
-        <div style={{ padding: "20px 24px", borderBottom: "1px solid rgba(255,255,255,.08)", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div style={{ padding: "20px 24px", borderBottom: "1px solid rgba(0,255,170,.06)", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <h2 style={{ fontSize: 20, fontWeight: 800, color: "#F2F2F7", margin: 0, letterSpacing: "-.02em", lineHeight: 1.3 }}>
               {formatName(item.name)}
             </h2>
-            <div style={{ fontSize: 12, color: "rgba(242,242,247,.38)", marginTop: 4 }}>
+            <div style={{ fontSize: 12, color: "rgba(242,242,247,.38)", marginTop: 4, fontFamily: "var(--m)" }}>
               {formatSubtitle(item)}
             </div>
             {repoPath && (
-              <div style={{ fontSize: 11, fontFamily: "'SF Mono', 'JetBrains Mono', monospace", color: "rgba(242,242,247,.38)", marginTop: 2, opacity: 0.7 }}>
+              <div style={{ fontSize: 11, fontFamily: "var(--m)", color: "rgba(242,242,247,.38)", marginTop: 2, opacity: 0.7 }}>
                 {repoPath}
               </div>
             )}
           </div>
-          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 8, background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", color: "rgba(242,242,247,.65)", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginLeft: 12 }}>
+          <button onClick={onClose} style={{ width: 32, height: 32, borderRadius: 6, background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", color: "rgba(242,242,247,.65)", fontSize: 16, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, marginLeft: 12 }}>
             ✕
           </button>
         </div>
 
-        {/* Badges: source + category + confidence */}
-        <div style={{ padding: "16px 24px", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", borderBottom: "1px solid rgba(255,255,255,.08)" }}>
-          {sl && <span style={{ padding: "4px 12px", borderRadius: 6, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)", fontSize: 11, fontWeight: 600, color: "rgba(242,242,247,.65)" }}>{sl}</span>}
-          {item.category && <span style={{ padding: "4px 12px", borderRadius: 6, background: "rgba(59,130,246,.08)", border: "1px solid rgba(59,130,246,.12)", fontSize: 11, fontWeight: 600, color: "#3B82F6" }}>{item.category}</span>}
+        {/* Badges + Confidence */}
+        <div style={{ padding: "16px 24px", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", borderBottom: "1px solid rgba(0,255,170,.06)" }}>
+          {sl && <span style={{ padding: "4px 12px", borderRadius: 4, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)", fontSize: 11, fontWeight: 600, color: "rgba(242,242,247,.65)", fontFamily: "var(--m)" }}>{sl}</span>}
+          {item.category && <span style={{ padding: "4px 12px", borderRadius: 4, background: "rgba(0,255,170,.08)", border: "1px solid rgba(0,255,170,.12)", fontSize: 11, fontWeight: 600, color: "#00FFAA", fontFamily: "var(--m)" }}>{item.category}</span>}
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 36, height: 36, borderRadius: 9, background: grade.bg, border: `1px solid ${grade.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <span style={{ fontSize: 15, fontWeight: 800, fontFamily: "'SF Mono', 'JetBrains Mono', monospace", color: grade.color }}>{grade.label}</span>
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+              <span style={{ fontSize: 18, fontWeight: 800, fontFamily: "var(--m)", color: grade.color }}>{grade.label}</span>
+              <div style={{ width: 36, height: 3, borderRadius: 1, background: "rgba(255,255,255,.06)", overflow: "hidden" }}>
+                <div style={{ width: `${confidence}%`, height: "100%", background: grade.color, borderRadius: 1 }} />
+              </div>
             </div>
             <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: grade.color }}>{confidence}%</div>
-              <div style={{ fontSize: 9, color: "rgba(242,242,247,.38)", letterSpacing: ".04em" }}>CONFIDENCE</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: grade.color, fontFamily: "var(--m)" }}>{confidence}%</div>
+              <div style={{ fontSize: 9, color: "rgba(242,242,247,.38)", letterSpacing: ".04em", fontFamily: "var(--m)" }}>CONFIDENCE</div>
             </div>
           </div>
         </div>
 
         {/* Author */}
         {item.author && (
-          <div style={{ padding: "14px 24px", borderBottom: "1px solid rgba(255,255,255,.08)", display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: 7, background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "rgba(242,242,247,.38)" }}>
+          <div style={{ padding: "14px 24px", borderBottom: "1px solid rgba(0,255,170,.06)", display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 28, height: 28, borderRadius: 6, background: "rgba(0,255,170,.06)", border: "1px solid rgba(0,255,170,.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#00FFAA", fontFamily: "var(--m)" }}>
               {item.author[0]?.toUpperCase()}
             </div>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 12, fontWeight: 600, color: "#F2F2F7" }}>{item.author}</div>
-              <div style={{ fontSize: 10, color: "rgba(242,242,247,.38)" }}>Author</div>
+              <div style={{ fontSize: 10, color: "rgba(242,242,247,.38)", fontFamily: "var(--m)" }}>Author</div>
             </div>
             {item.author_url && (
-              <a href={item.author_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, fontWeight: 600, color: "rgba(242,242,247,.38)", textDecoration: "none", padding: "4px 10px", borderRadius: 6, border: "1px solid rgba(255,255,255,.08)", transition: "all .15s" }}>
+              <a href={item.author_url} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, fontWeight: 600, color: "rgba(242,242,247,.38)", textDecoration: "none", padding: "4px 10px", borderRadius: 4, border: "1px solid rgba(255,255,255,.08)", transition: "all .15s", fontFamily: "var(--m)" }}>
                 Profile ↗
               </a>
             )}
@@ -533,8 +662,8 @@ function DetailPanel({ item, onClose }) {
         )}
 
         {/* Description */}
-        <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(255,255,255,.08)" }}>
-          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "rgba(242,242,247,.38)", marginBottom: 8 }}>Description</div>
+        <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(0,255,170,.06)" }}>
+          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "rgba(242,242,247,.38)", marginBottom: 8, fontFamily: "var(--m)" }}>Description</div>
           <div style={{ fontSize: 13, color: "rgba(242,242,247,.65)", lineHeight: 1.65 }}>
             {item.description || "No description available."}
           </div>
@@ -542,13 +671,13 @@ function DetailPanel({ item, onClose }) {
 
         {/* Metrics grid */}
         {metrics.length > 0 && (
-          <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(255,255,255,.08)" }}>
-            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "rgba(242,242,247,.38)", marginBottom: 10 }}>Metrics</div>
+          <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(0,255,170,.06)" }}>
+            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "rgba(242,242,247,.38)", marginBottom: 10, fontFamily: "var(--m)" }}>Metrics</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
               {metrics.map((m, i) => (
-                <div key={i} style={{ padding: "10px 12px", borderRadius: 8, background: "rgba(255,255,255,.02)", border: "1px solid rgba(255,255,255,.08)" }}>
-                  <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "rgba(242,242,247,.38)", marginBottom: 3 }}>{m.label}</div>
-                  <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "'SF Mono', 'JetBrains Mono', monospace", color: "#F2F2F7" }}>{m.value}</div>
+                <div key={i} style={{ padding: "10px 12px", borderRadius: 6, background: "rgba(255,255,255,.02)", border: "1px solid rgba(255,255,255,.06)" }}>
+                  <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "rgba(242,242,247,.38)", marginBottom: 3, fontFamily: "var(--m)" }}>{m.label}</div>
+                  <div style={{ fontSize: 14, fontWeight: 700, fontFamily: "var(--m)", color: "#F2F2F7" }}>{m.value}</div>
                 </div>
               ))}
             </div>
@@ -557,11 +686,11 @@ function DetailPanel({ item, onClose }) {
 
         {/* Topics */}
         {item.topics?.length > 0 && (
-          <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(255,255,255,.08)" }}>
-            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "rgba(242,242,247,.38)", marginBottom: 8 }}>Topics</div>
+          <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(0,255,170,.06)" }}>
+            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "rgba(242,242,247,.38)", marginBottom: 8, fontFamily: "var(--m)" }}>Topics</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {item.topics.map((t, i) => (
-                <span key={i} style={{ padding: "4px 10px", borderRadius: 20, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)", fontSize: 11, fontWeight: 500, color: "rgba(242,242,247,.65)" }}>{t}</span>
+                <span key={i} style={{ padding: "4px 10px", borderRadius: 4, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)", fontSize: 11, fontWeight: 500, color: "rgba(242,242,247,.65)", fontFamily: "var(--m)" }}>{t}</span>
               ))}
             </div>
           </div>
@@ -569,39 +698,40 @@ function DetailPanel({ item, onClose }) {
 
         {/* AI Keywords */}
         {item.ai_keywords?.length > 0 && (
-          <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(255,255,255,.08)" }}>
-            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "rgba(242,242,247,.38)", marginBottom: 8 }}>AI Classification</div>
+          <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(0,255,170,.06)" }}>
+            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "rgba(242,242,247,.38)", marginBottom: 8, fontFamily: "var(--m)" }}>AI Classification</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {item.ai_keywords.map((kw, i) => (
-                <span key={i} style={{ padding: "4px 10px", borderRadius: 20, background: "rgba(59,130,246,.08)", border: "1px solid rgba(59,130,246,.12)", fontSize: 11, fontWeight: 600, color: "#3B82F6" }}>{kw}</span>
+                <span key={i} style={{ padding: "4px 10px", borderRadius: 4, background: "rgba(0,255,170,.06)", border: "1px solid rgba(0,255,170,.1)", fontSize: 11, fontWeight: 600, color: "#00FFAA", fontFamily: "var(--m)" }}>{kw}</span>
               ))}
             </div>
           </div>
         )}
 
         {/* Timestamps */}
-        <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(255,255,255,.08)", display: "flex", gap: 24 }}>
+        <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(0,255,170,.06)", display: "flex", gap: 24 }}>
           <div>
-            <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "rgba(242,242,247,.38)", marginBottom: 3 }}>Discovered</div>
-            <div style={{ fontSize: 12, fontWeight: 600, color: "#F2F2F7" }}>{item.discovered_at ? timeAgo(item.discovered_at) : "—"}</div>
-            {item.discovered_at && <div style={{ fontSize: 10, color: "rgba(242,242,247,.38)", marginTop: 1 }}>{new Date(item.discovered_at).toLocaleDateString()}</div>}
+            <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "rgba(242,242,247,.38)", marginBottom: 3, fontFamily: "var(--m)" }}>Discovered</div>
+            <div style={{ fontSize: 12, fontWeight: 600, color: "#F2F2F7", fontFamily: "var(--m)" }}>{item.discovered_at ? timeAgo(item.discovered_at) : "—"}</div>
+            {item.discovered_at && <div style={{ fontSize: 10, color: "rgba(242,242,247,.38)", marginTop: 1, fontFamily: "var(--m)" }}>{new Date(item.discovered_at).toLocaleDateString()}</div>}
           </div>
           {item.source_created_at && (
             <div>
-              <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "rgba(242,242,247,.38)", marginBottom: 3 }}>Created</div>
-              <div style={{ fontSize: 12, fontWeight: 600, color: "#F2F2F7" }}>{timeAgo(item.source_created_at)}</div>
-              <div style={{ fontSize: 10, color: "rgba(242,242,247,.38)", marginTop: 1 }}>{new Date(item.source_created_at).toLocaleDateString()}</div>
+              <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "rgba(242,242,247,.38)", marginBottom: 3, fontFamily: "var(--m)" }}>Created</div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: "#F2F2F7", fontFamily: "var(--m)" }}>{timeAgo(item.source_created_at)}</div>
+              <div style={{ fontSize: 10, color: "rgba(242,242,247,.38)", marginTop: 1, fontFamily: "var(--m)" }}>{new Date(item.source_created_at).toLocaleDateString()}</div>
             </div>
           )}
         </div>
 
         {/* Action buttons */}
-        <div style={{ padding: "20px 24px", display: "flex", gap: 10 }}>
-          <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: "12px 0", borderRadius: 10, background: "#3B82F6", color: "#fff", fontSize: 13, fontWeight: 700, textDecoration: "none", textAlign: "center", display: "block", transition: "opacity .15s" }}>
+        <div style={{ padding: "20px 24px", display: "flex", gap: 10, alignItems: "center" }}>
+          <UpvoteButton item={item} voted={voted} onVote={onVote} size="lg" />
+          <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: "12px 0", borderRadius: 6, background: "#00FFAA", color: "#0A0B10", fontSize: 13, fontWeight: 800, textDecoration: "none", textAlign: "center", display: "block", transition: "opacity .15s", fontFamily: "var(--m)", letterSpacing: ".02em" }}>
             Open Product →
           </a>
           {item.author_url && (
-            <a href={item.author_url} target="_blank" rel="noopener noreferrer" style={{ padding: "12px 20px", borderRadius: 10, background: "transparent", border: "1px solid rgba(255,255,255,.12)", color: "rgba(242,242,247,.65)", fontSize: 13, fontWeight: 600, textDecoration: "none", textAlign: "center", transition: "all .15s" }}>
+            <a href={item.author_url} target="_blank" rel="noopener noreferrer" style={{ padding: "12px 20px", borderRadius: 6, background: "transparent", border: "1px solid rgba(255,255,255,.12)", color: "rgba(242,242,247,.65)", fontSize: 13, fontWeight: 600, textDecoration: "none", textAlign: "center", transition: "all .15s" }}>
               View Author
             </a>
           )}
@@ -616,13 +746,13 @@ function EmptyState() {
   return (
     <div style={{ padding: "100px 0", textAlign: "center", animation: "fi .5s ease both" }}>
       <div style={{ position: "relative", display: "inline-block", marginBottom: 32, width: 100, height: 100 }}>
-        <div style={{ position: "absolute", inset: 10, borderRadius: "50%", background: "linear-gradient(135deg, rgba(59,130,246,.1), rgba(139,92,246,.05))", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ position: "absolute", inset: 10, borderRadius: "50%", background: "linear-gradient(135deg, rgba(0,255,170,.1), rgba(167,139,250,.05))", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <span style={{ fontSize: 32, filter: "saturate(0) brightness(1.2)", animation: "float 3s ease-in-out infinite" }}>⌕</span>
         </div>
-        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: "1px solid rgba(59,130,246,.15)", animation: "ring-rotate 8s linear infinite" }}>
-          <div style={{ position: "absolute", top: -3, left: "50%", transform: "translateX(-50%)", width: 6, height: 6, borderRadius: "50%", background: "#3B82F6", boxShadow: "0 0 10px rgba(59,130,246,.5)" }} />
+        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: "1px solid rgba(0,255,170,.15)", animation: "ring-rotate 8s linear infinite" }}>
+          <div style={{ position: "absolute", top: -3, left: "50%", transform: "translateX(-50%)", width: 6, height: 6, borderRadius: "50%", background: "#00FFAA", boxShadow: "0 0 10px rgba(0,255,170,.5)" }} />
         </div>
-        <div style={{ position: "absolute", inset: -5, borderRadius: "50%", border: "1px dashed rgba(139,92,246,.1)", animation: "ring-rotate 12s linear infinite reverse" }} />
+        <div style={{ position: "absolute", inset: -5, borderRadius: "50%", border: "1px dashed rgba(167,139,250,.1)", animation: "ring-rotate 12s linear infinite reverse" }} />
       </div>
 
       <div style={{ fontSize: 22, fontWeight: 800, fontFamily: "var(--m)", color: "var(--t1)", marginBottom: 10, letterSpacing: "-.02em" }}>
@@ -632,9 +762,9 @@ function EmptyState() {
         Our intelligence engine monitors 11 sources across the internet for new AI products, agents, models, and tools. Discoveries appear here in real-time.
       </div>
 
-      <div style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "10px 20px", borderRadius: 12, background: "var(--s1)", border: "1px solid var(--b1)" }}>
-        <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#10B981", animation: "lp 2s ease-in-out infinite", boxShadow: "0 0 8px rgba(16,185,129,.4)" }} />
-        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--t2)" }}>Intelligence engine active — awaiting first screening cycle</span>
+      <div style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "10px 20px", borderRadius: 6, background: "var(--s1)", border: "1px solid var(--b1)" }}>
+        <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#00FFAA", animation: "lp 2s ease-in-out infinite", boxShadow: "0 0 8px rgba(0,255,170,.4)" }} />
+        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--t2)", fontFamily: "var(--m)" }}>Intelligence engine active — awaiting first screening cycle</span>
       </div>
     </div>
   );
