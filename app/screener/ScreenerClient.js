@@ -309,6 +309,7 @@ export default function ScreenerClient() {
             <span style={{ display: "inline-block", fontSize: 14, animation: refreshing ? "spin .5s linear infinite" : "none" }}>⟳</span>
             Refresh
           </button>
+          <a href="/activity" className="link-hover dash-link" style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid var(--b1)", color: "var(--t2)", fontSize: 12, fontWeight: 600 }}>Activity</a>
           <a href="/dashboard" className="link-hover dash-link" style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid var(--b1)", color: "var(--t2)", fontSize: 12, fontWeight: 600 }}>Dashboard</a>
         </div>
       </header>

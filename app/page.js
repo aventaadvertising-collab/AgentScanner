@@ -140,6 +140,7 @@ export default function LandingPage() {
         <div className="nav-links" style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <a href="/dashboard" className="link-hover" style={{ padding: "6px 14px", borderRadius: 6, fontSize: 13, color: "var(--t2)", fontWeight: 500 }}>Dashboard</a>
           <a href="/screener" className="link-hover" style={{ padding: "6px 14px", borderRadius: 6, fontSize: 13, color: "var(--t2)", fontWeight: 500 }}>Screener</a>
+          <a href="/activity" className="link-hover" style={{ padding: "6px 14px", borderRadius: 6, fontSize: 13, color: "var(--t2)", fontWeight: 500 }}>Activity</a>
           <div style={{ width: 1, height: 20, background: "var(--b2)", margin: "0 4px" }} />
           <a href="/screener" className="cta-btn" style={{ padding: "8px 20px", borderRadius: 6, background: "#2DD4BF", color: "#0A0B10", fontSize: 13, fontWeight: 800, textDecoration: "none", letterSpacing: ".01em", fontFamily: "var(--m)" }}>Open Screener</a>
         </div>
