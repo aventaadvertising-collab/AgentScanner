@@ -292,6 +292,7 @@ export default function AgentScreener() {
       const social = pd.social;
       const uptime = pd.uptime;
       const jobs = pd.jobs;
+      const commitActivity = pd.github_activity;
       const trafficVisits = traffic?.estimate?.estimated_monthly_visits ?? null;
       const fundTotal = fund?.total ?? p.fundingTotal;
 
@@ -325,6 +326,7 @@ export default function AgentScreener() {
         mau: estMAU,
         revenueConfidence: revConf,
         revenueSourceNames: revSrcNames,
+        commitActivity: commitActivity?.weeks ?? null,
         verifications: {
           ...p.verifications,
           community: gh ? "github" : p.verifications.community,

@@ -6,7 +6,7 @@
 // 3 batch crons, each running sources IN PARALLEL:
 //   batch1: github, pypi, huggingface, hackernews (every minute)
 //   batch2: npm, reddit, producthunt, arxiv       (every minute)
-//   batch3: github-trending, devto, lobsters      (every minute)
+//   batch3: github-trending, github-momentum, devto, lobsters (every minute)
 //
 // Also supports: source=all, source=<individual-source>
 // ============================================================
@@ -21,6 +21,7 @@ import { scanReddit } from "@/lib/scanner/reddit";
 import { scanProductHunt } from "@/lib/scanner/producthunt";
 import { scanArxiv } from "@/lib/scanner/arxiv";
 import { scanGitHubTrending } from "@/lib/scanner/github-trending";
+import { scanGitHubMomentum } from "@/lib/scanner/github-momentum";
 import { scanDevTo } from "@/lib/scanner/devto";
 import { scanLobsters } from "@/lib/scanner/lobsters";
 import { validateProduct } from "@/lib/scanner/product-filter";
@@ -29,7 +30,7 @@ import { validateProduct } from "@/lib/scanner/product-filter";
 const BATCHES = {
   batch1: ["github", "pypi", "huggingface", "hackernews"],
   batch2: ["npm", "reddit", "producthunt", "arxiv"],
-  batch3: ["github-trending", "devto", "lobsters"],
+  batch3: ["github-trending", "github-momentum", "devto", "lobsters"],
 };
 
 function getSupabaseAdmin() {
@@ -148,6 +149,12 @@ async function runSource(sourceName, stateMap, supabase) {
       }
       case "github-trending": {
         const r = await scanGitHubTrending(state.last_scan_at);
+        discoveries = r.discoveries;
+        stateUpdate = { last_scan_at: r.newLastScanAt };
+        break;
+      }
+      case "github-momentum": {
+        const r = await scanGitHubMomentum(state.last_scan_at, supabase, process.env.GITHUB_TOKEN);
         discoveries = r.discoveries;
         stateUpdate = { last_scan_at: r.newLastScanAt };
         break;

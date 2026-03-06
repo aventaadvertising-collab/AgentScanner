@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { getSupabase } from "@/lib/supabase";
+import { CommitHeatmapLoader } from "@/app/components/CommitHeatmap";
 
 // ─── Helpers ───
 function timeAgo(date) {
@@ -665,6 +666,14 @@ function DetailPanel({ item, onClose, voted, onVote }) {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Commit Activity Heatmap */}
+        {repoPath && (
+          <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(255,255,255,.04)" }}>
+            <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "rgba(242,242,247,.38)", marginBottom: 10, fontFamily: "var(--m)" }}>Commit Activity</div>
+            <CommitHeatmapLoader repo={repoPath} />
           </div>
         )}
 

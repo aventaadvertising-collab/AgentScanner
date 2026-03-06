@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { fmt$, fmtU, fmtP, isV, vCount, SRC } from "@/lib/format";
+import { CommitHeatmapLoader } from "@/app/components/CommitHeatmap";
 
 // ============================================================
 // SHARED UI COMPONENTS
@@ -267,6 +268,16 @@ export default function ProductDetail({ product: p, isModal = true, onClose, onA
           <span className="label-xs" style={{ marginBottom: 10, display: "block" }}>Traction Index (30d)</span>
           <div className="card-inner"><Spark data={p.spark} up={p.mrrChange == null || p.mrrChange >= 0} w={600} h={44} /></div>
         </div>
+
+        {/* Commit Activity Heatmap */}
+        {p.github && (
+          <div style={{ marginBottom: 18 }}>
+            <span className="label-xs" style={{ marginBottom: 10, display: "block" }}>Commit Activity (52 weeks)</span>
+            <div className="card-inner">
+              <CommitHeatmapLoader productId={p.id} commitActivity={p.commitActivity} />
+            </div>
+          </div>
+        )}
 
         {/* Metrics Grid */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 7 }}>
