@@ -309,6 +309,47 @@ export default function ActivityClient() {
     return () => supabase.removeChannel(channel);
   }, []);
 
+  // ─── FETCH BREAKOUTS ───
+  useEffect(() => {
+    fetch("/api/scanner?source=github-momentum&limit=50")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.discoveries) {
+          setBreakouts(d.discoveries.sort((a, b) => new Date(b.discovered_at) - new Date(a.discovered_at)));
+        }
+        setBreakoutsLoading(false);
+      })
+      .catch(() => setBreakoutsLoading(false));
+  }, []);
+
+  // ─── SUPABASE REAL-TIME FOR BREAKOUTS ───
+  useEffect(() => {
+    const supabase = getSupabase();
+    if (!supabase) return;
+
+    const channel = supabase
+      .channel("activity-breakouts")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "scanner_discoveries",
+          filter: "source=eq.github-momentum",
+        },
+        (payload) => {
+          setBreakouts((prev) => {
+            const id = payload.new.id || payload.new.external_id;
+            if (prev.some((d) => (d.id || d.external_id) === id)) return prev;
+            return [payload.new, ...prev].slice(0, 100);
+          });
+        }
+      )
+      .subscribe();
+
+    return () => supabase.removeChannel(channel);
+  }, []);
+
   // Tick for relative time
   useEffect(() => {
     const id = setInterval(() => setTick((t) => t + 1), 10_000);
