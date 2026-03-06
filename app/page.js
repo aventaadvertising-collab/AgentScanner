@@ -10,14 +10,6 @@ function formatName(rawName) {
   return clean.replace(/\b([a-z])/g, (_, c) => c.toUpperCase());
 }
 
-function confidenceGrade(c) {
-  if (c >= 90) return { label: "S", color: "#2DD4BF" };
-  if (c >= 75) return { label: "A", color: "#A78BFA" };
-  if (c >= 60) return { label: "B", color: "#38BDF8" };
-  if (c >= 40) return { label: "C", color: "#FBBF24" };
-  return { label: "D", color: "rgba(240,240,245,.3)" };
-}
-
 function fmtN(n) {
   if (!n) return "0";
   if (n >= 1e6) return (n / 1e6).toFixed(1) + "M";
@@ -115,12 +107,22 @@ export default function LandingPage() {
         .bento-card:hover { border-color: var(--b2); box-shadow: 0 2px 16px rgba(0,0,0,.15); }
         .bento-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,.04), transparent); }
         @media (max-width: 768px) {
-          .hero-split { flex-direction: column !important; }
+          .hero-split { flex-direction: column !important; padding: 40px 16px 32px !important; gap: 28px !important; }
           .hero-left { max-width: 100% !important; }
+          .hero-left h1 { font-size: 32px !important; }
+          .hero-left p { font-size: 14px !important; }
           .hero-right { max-width: 100% !important; width: 100% !important; }
           .bento-grid { grid-template-columns: 1fr !important; }
           .bento-wide { grid-column: span 1 !important; }
           .nav-links { display: none !important; }
+          .bento-section { padding: 12px 16px 48px !important; }
+          .ticker-section { padding: 0 0 28px !important; }
+          .landing-footer { padding: 16px !important; flex-direction: column !important; gap: 8px !important; text-align: center !important; }
+          .hero-stats { gap: 20px !important; }
+          .hero-ctas { flex-direction: column !important; }
+          .hero-ctas a { width: 100% !important; text-align: center !important; justify-content: center !important; }
+          .mini-terminal { display: none !important; }
+          .landing-nav { padding: 0 16px !important; }
         }
       `}</style>
 
@@ -131,7 +133,7 @@ export default function LandingPage() {
       </div>
 
       {/* ─── NAV ─── */}
-      <nav style={{ padding: "0 48px", height: 64, display: "flex", alignItems: "center", justifyContent: "space-between", position: "relative", zIndex: 10, borderBottom: "1px solid var(--b1)", background: "rgba(10,11,16,.75)", backdropFilter: "blur(24px) saturate(180%)" }}>
+      <nav className="landing-nav" style={{ padding: "0 48px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", position: "relative", zIndex: 10, borderBottom: "1px solid var(--b1)", background: "rgba(10,11,16,.75)", backdropFilter: "blur(24px) saturate(180%)" }}>
         <span style={{ fontSize: 15, fontWeight: 800, fontFamily: "var(--m)", letterSpacing: "-.02em" }}>
           agent<span style={{ color: "var(--g)" }}>screener</span>
         </span>
@@ -159,10 +161,10 @@ export default function LandingPage() {
           </h1>
 
           <p style={{ fontSize: 16, color: "var(--t2)", lineHeight: 1.7, marginBottom: 36, maxWidth: 420 }}>
-            11 sources scanning every minute. Every AI startup, agent, model, and tool — indexed, graded, and ranked in real-time.
+            11 sources scanning every minute. Every AI startup, agent, model, and tool — discovered and tracked in real-time.
           </p>
 
-          <div style={{ display: "flex", gap: 12, marginBottom: 40 }}>
+          <div className="hero-ctas" style={{ display: "flex", gap: 12, marginBottom: 40 }}>
             <a href="/screener" className="cta-btn" style={{ padding: "14px 36px", borderRadius: 8, background: "#2DD4BF", color: "#0A0B10", fontSize: 15, fontWeight: 800, textDecoration: "none", letterSpacing: ".01em", boxShadow: "0 4px 16px rgba(0,0,0,.3)", fontFamily: "var(--m)" }}>
               Open Screener
             </a>
@@ -172,7 +174,7 @@ export default function LandingPage() {
           </div>
 
           {/* Quick stats */}
-          <div style={{ display: "flex", gap: 32 }}>
+          <div className="hero-stats" style={{ display: "flex", gap: 32 }}>
             {[
               { label: "Today", value: liveStats.today || "—" },
               { label: "This hour", value: liveStats.this_hour || "—" },
@@ -201,15 +203,8 @@ export default function LandingPage() {
             {/* Feed items */}
             <div style={{ padding: "4px 0" }}>
               {heroProducts.length > 0 ? heroProducts.map((item, i) => {
-                const confidence = Math.round((item.ai_confidence || 0) * 100);
-                const grade = confidenceGrade(confidence);
                 return (
                   <a key={item.id || i} href="/screener" style={{ display: "flex", alignItems: "center", padding: "12px 20px", gap: 14, textDecoration: "none", color: "inherit", transition: "background .15s", animation: `feed-in .4s ease ${i * 0.08}s both` }} onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,.02)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
-                    {/* Confidence grade */}
-                    <div style={{ width: 32, textAlign: "center", flexShrink: 0 }}>
-                      <span style={{ fontSize: 14, fontWeight: 800, fontFamily: "var(--m)", color: grade.color }}>{grade.label}</span>
-                    </div>
-
                     {/* Name + category */}
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: "var(--t1)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{formatName(item.name)}</div>
@@ -249,13 +244,12 @@ export default function LandingPage() {
 
       {/* ─── TICKER / MARQUEE ─── */}
       {tickerProducts.length > 0 && (
-        <section style={{ padding: "0 0 48px", overflow: "hidden", position: "relative", zIndex: 10 }}>
+        <section className="ticker-section" style={{ padding: "0 0 48px", overflow: "hidden", position: "relative", zIndex: 10 }}>
           <div style={{ borderTop: "1px solid var(--b1)", borderBottom: "1px solid var(--b1)", padding: "14px 0", background: "rgba(18,20,28,.5)" }}>
             <div style={{ display: "flex", animation: "marquee 40s linear infinite", width: "max-content" }}>
               {[...tickerProducts, ...tickerProducts].map((item, i) => (
                 <a key={i} href="/screener" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 16px", margin: "0 4px", borderRadius: 4, background: "rgba(255,255,255,.02)", border: "1px solid rgba(255,255,255,.04)", textDecoration: "none", whiteSpace: "nowrap", transition: "all .15s", flexShrink: 0 }} onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,.1)"; e.currentTarget.style.background = "rgba(255,255,255,.04)"; }} onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,.04)"; e.currentTarget.style.background = "rgba(255,255,255,.02)"; }}>
                   <span style={{ fontSize: 11, fontWeight: 600, color: "var(--t2)" }}>{formatName(item.name)}</span>
-                  <span style={{ fontSize: 9, fontWeight: 700, color: confidenceGrade(Math.round((item.ai_confidence || 0) * 100)).color, fontFamily: "var(--m)" }}>{confidenceGrade(Math.round((item.ai_confidence || 0) * 100)).label}</span>
                 </a>
               ))}
             </div>
@@ -264,7 +258,7 @@ export default function LandingPage() {
       )}
 
       {/* ─── BENTO GRID ─── */}
-      <section style={{ padding: "20px 48px 80px", position: "relative", zIndex: 10, maxWidth: 1200, margin: "0 auto" }}>
+      <section className="bento-section" style={{ padding: "20px 48px 80px", position: "relative", zIndex: 10, maxWidth: 1200, margin: "0 auto" }}>
         <div className="bento-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 14 }}>
 
           {/* Card 1: Sources — tall */}
@@ -317,31 +311,8 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Card 4: Classification system */}
-          <div className="bento-card" style={{ animation: "fi-scale .4s ease .4s both" }}>
-            <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "#FBBF24", marginBottom: 16, fontFamily: "var(--m)" }}>CONFIDENCE GRADING</div>
-            <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: "-.02em", marginBottom: 6 }}>AI-powered scoring</div>
-            <div style={{ fontSize: 13, color: "var(--t2)", marginBottom: 24, lineHeight: 1.5 }}>Every product gets a confidence grade based on weighted keyword analysis</div>
-            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-              {[
-                { label: "S", color: "#2DD4BF", desc: "90%+" },
-                { label: "A", color: "#A78BFA", desc: "75%+" },
-                { label: "B", color: "#38BDF8", desc: "60%+" },
-                { label: "C", color: "#FBBF24", desc: "40%+" },
-                { label: "D", color: "rgba(240,240,245,.3)", desc: "<40%" },
-              ].map((g, i) => (
-                <div key={i} style={{ flex: 1, textAlign: "center" }}>
-                  <div style={{ width: 36, height: 36, borderRadius: 8, background: `${g.color}15`, border: `1px solid ${g.color}30`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 6px" }}>
-                    <span style={{ fontSize: 16, fontWeight: 800, fontFamily: "var(--m)", color: g.color }}>{g.label}</span>
-                  </div>
-                  <div style={{ fontSize: 9, color: "var(--t3)", fontFamily: "var(--m)" }}>{g.desc}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Card 5: CTA — spans 2 columns */}
-          <div className="bento-card bento-wide" style={{ gridColumn: "span 2", animation: "fi-scale .4s ease .5s both", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 32 }}>
+          {/* Card 4: CTA — spans full bottom row */}
+          <div className="bento-card bento-wide" style={{ gridColumn: "span 3", animation: "fi-scale .4s ease .4s both", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 32 }}>
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--g)", marginBottom: 16, fontFamily: "var(--m)" }}>BUILT FOR BUILDERS</div>
               <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: "-.03em", marginBottom: 10, lineHeight: 1.2 }}>
@@ -360,7 +331,7 @@ export default function LandingPage() {
               </div>
             </div>
             {/* Mini terminal preview */}
-            <div style={{ width: 200, flexShrink: 0, background: "rgba(0,0,0,.3)", borderRadius: 10, padding: "14px 16px", border: "1px solid rgba(255,255,255,.06)", fontFamily: "var(--m)" }}>
+            <div className="mini-terminal" style={{ width: 200, flexShrink: 0, background: "rgba(0,0,0,.3)", borderRadius: 10, padding: "14px 16px", border: "1px solid rgba(255,255,255,.06)", fontFamily: "var(--m)" }}>
               <div style={{ fontSize: 9, color: "var(--t3)", marginBottom: 8, letterSpacing: ".06em" }}>$ agentscreener</div>
               {["scanning...", "github ✓", "pypi ✓", "npm ✓", "huggingface ✓", `${liveStats.today || "847"} products`].map((line, i) => (
                 <div key={i} style={{ fontSize: 10, color: i === 5 ? "#2DD4BF" : "var(--t3)", marginBottom: 2, opacity: 0.7 + (i * 0.06) }}>{line}</div>
@@ -371,7 +342,7 @@ export default function LandingPage() {
       </section>
 
       {/* ─── FOOTER ─── */}
-      <footer style={{ padding: "20px 48px", borderTop: "1px solid var(--b1)", display: "flex", justifyContent: "space-between", alignItems: "center", position: "relative", zIndex: 10 }}>
+      <footer className="landing-footer" style={{ padding: "20px 48px", borderTop: "1px solid var(--b1)", display: "flex", justifyContent: "space-between", alignItems: "center", position: "relative", zIndex: 10 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <span style={{ fontSize: 10, color: "var(--t3)", fontFamily: "var(--m)", letterSpacing: ".06em" }}>agentscreener v1.0</span>
           <div style={{ width: 3, height: 3, borderRadius: "50%", background: "var(--t3)" }} />

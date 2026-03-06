@@ -413,16 +413,32 @@ export default function AgentScreener() {
         .mover { flex: 0 0 auto; min-width: 185px; padding: 13px 16px; border-radius: 10px; background: var(--s1); border: 1px solid var(--b1); cursor: pointer; transition: all .12s; }
         .mover:hover { background: var(--sh); border-color: var(--b2); }
         .wl-star { background: none; border: none; cursor: pointer; font-size: 13px; padding: 0; transition: all .12s; }
+        @media (max-width: 768px) {
+          .dash-header { padding: 0 12px !important; }
+          .dash-header-right { display: none !important; }
+          .dash-header-mobile { display: flex !important; }
+          .dash-stats-bar { padding: 8px 12px !important; flex-wrap: wrap !important; gap: 12px !important; }
+          .dash-content { padding: 12px !important; }
+          .dash-controls { flex-direction: column !important; align-items: stretch !important; }
+          .dash-cats { max-width: 100% !important; }
+          .dash-table-wrap { overflow-x: auto !important; -webkit-overflow-scrolling: touch !important; }
+          .row, .row-h { min-width: 800px !important; }
+          .mover { min-width: 160px !important; }
+        }
       `}</style>
 
       {/* HEADER */}
-      <header style={{ padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--b1)", position: "sticky", top: 0, background: "rgba(12,13,18,.88)", backdropFilter: "blur(24px) saturate(180%)", zIndex: 100 }}>
+      <header className="dash-header" style={{ padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--b1)", position: "sticky", top: 0, background: "rgba(12,13,18,.88)", backdropFilter: "blur(24px) saturate(180%)", zIndex: 100 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <span style={{ fontSize: 15, fontWeight: 800, fontFamily: "var(--m)", letterSpacing: "-.02em" }}>
             agent<span style={{ color: "var(--g)" }}>screener</span>
           </span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        {/* Mobile header buttons */}
+        <div className="dash-header-mobile" style={{ display: "none", alignItems: "center", gap: 8 }}>
+          <a href="/screener" style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,.1)", background: "rgba(255,255,255,.03)", color: "var(--t2)", fontSize: 11, fontWeight: 700, textDecoration: "none", fontFamily: "var(--f)" }}>Screener</a>
+        </div>
+        <div className="dash-header-right" style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 600, color: "var(--t3)" }}>
             <span style={{ width: 4, height: 4, borderRadius: "50%", background: "#2DD4BF", animation: "lp 2s ease-in-out infinite" }} />LIVE
             {lastUpdate && <span style={{ fontSize: 9, color: "var(--t3)", fontWeight: 500 }}>{Math.round((Date.now() - lastUpdate.getTime()) / 1000)}s ago</span>}
@@ -451,7 +467,7 @@ export default function AgentScreener() {
       </header>
 
       {/* STATS BAR */}
-      <div style={{ padding: "10px 24px", display: "flex", gap: 24, borderBottom: "1px solid var(--b1)", background: "rgba(255,255,255,.01)" }}>
+      <div className="dash-stats-bar" style={{ padding: "10px 24px", display: "flex", gap: 24, borderBottom: "1px solid var(--b1)", background: "rgba(255,255,255,.01)" }}>
         {[["Products", agg.n], ["Categories", agg.cats], ["Open Source", agg.gh], ["New This Month", newlyAdded.length], ...(hasPipelineData ? [["Total Stars", fmtU(agg.totalStars)]] : [["Crypto-AI", agg.tokens]])].map(([l, v], i) => (
           <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--t3)" }}>{l}</span>
@@ -460,7 +476,7 @@ export default function AgentScreener() {
         ))}
       </div>
 
-      <div style={{ padding: "18px 24px" }}>
+      <div className="dash-content" style={{ padding: "18px 24px" }}>
 
         {/* TOP MOVERS */}
         <div style={{ marginBottom: 20 }}>
@@ -522,8 +538,8 @@ export default function AgentScreener() {
         )}
 
         {/* CONTROLS */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
-          <div style={{ display: "flex", gap: 3, alignItems: "center", overflowX: "auto", flexShrink: 1, maxWidth: "70%", paddingBottom: 2 }}>
+        <div className="dash-controls" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10, flexWrap: "wrap", gap: 8 }}>
+          <div className="dash-cats" style={{ display: "flex", gap: 3, alignItems: "center", overflowX: "auto", flexShrink: 1, maxWidth: "70%", paddingBottom: 2 }}>
             {ALL_CATS.map(c => <button key={c} className={`cat-btn${cat === c ? " on" : ""}`} onClick={() => setCat(c)} style={{ whiteSpace: "nowrap", flexShrink: 0 }}>{c}</button>)}
             <div style={{ width: 1, height: 18, background: "var(--b1)", margin: "0 4px" }} />
             <button className={`cat-btn${wlFilter ? " on" : ""}`} onClick={() => setWlFilter(!wlFilter)} style={wlFilter ? { borderColor: "rgba(217,119,6,.25)", background: "rgba(217,119,6,.06)", color: "var(--y)" } : {}}>
@@ -541,7 +557,7 @@ export default function AgentScreener() {
         </div>
 
         {/* TABLE */}
-        {view === "table" && <>
+        {view === "table" && <div className="dash-table-wrap">
           <div className="row-h" style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--t3)" }}>
             <span>#</span><span>Product</span><span style={{ textAlign: "right" }}>Revenue /mo</span><span style={{ textAlign: "right" }}>MAU</span><span style={{ textAlign: "right" }}>GitHub</span><span style={{ textAlign: "right" }}>Links</span><span style={{ textAlign: "center" }}>Sources</span><span style={{ textAlign: "right" }}>30d</span><span></span>
           </div>
@@ -587,7 +603,7 @@ export default function AgentScreener() {
               </div>
             ))}
           </div>
-        </>}
+        </div>}
 
         {/* GRID */}
         {view === "grid" && (

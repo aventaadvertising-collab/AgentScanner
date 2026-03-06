@@ -36,14 +36,6 @@ function sourceLabel(url) {
   return "Source";
 }
 
-function confidenceGrade(c) {
-  if (c >= 90) return { label: "S", color: "#2DD4BF", bg: "rgba(45,212,191,.1)", border: "rgba(45,212,191,.2)" };
-  if (c >= 75) return { label: "A", color: "#A78BFA", bg: "rgba(167,139,250,.1)", border: "rgba(167,139,250,.2)" };
-  if (c >= 60) return { label: "B", color: "#38BDF8", bg: "rgba(56,189,248,.1)", border: "rgba(56,189,248,.2)" };
-  if (c >= 40) return { label: "C", color: "#FBBF24", bg: "rgba(251,191,36,.1)", border: "rgba(251,191,36,.2)" };
-  return { label: "D", color: "rgba(240,240,245,.3)", bg: "rgba(255,255,255,.03)", border: "rgba(255,255,255,.06)" };
-}
-
 function formatName(rawName) {
   if (!rawName) return "";
   let clean = rawName.replace(/^@[\w.-]+\//, "");
@@ -268,6 +260,21 @@ export default function ScreenerClient() {
         .vote-btn { transition: all .15s; cursor: pointer; border: none; background: transparent; }
         .vote-btn:hover { background: rgba(255,255,255,.04) !important; }
         .vote-btn:active .vote-arrow { animation: vote-pop .2s ease; }
+        @media (max-width: 768px) {
+          .screener-header { padding: 0 12px !important; }
+          .screener-header-right .dash-link { display: none !important; }
+          .screener-header-right .screener-badge { display: none !important; }
+          .screener-stats { grid-template-columns: repeat(2, 1fr) !important; padding: 12px !important; }
+          .screener-toolbar { padding: 0 12px 12px !important; flex-direction: column !important; align-items: stretch !important; }
+          .screener-pills { max-width: 100% !important; overflow-x: auto !important; }
+          .screener-search-row { width: 100% !important; }
+          .screener-search-row input { width: 100% !important; }
+          .screener-feed { padding: 0 12px 40px !important; }
+          .screener-grid { grid-template-columns: 1fr !important; }
+          .screener-footer { padding: 16px 12px !important; flex-direction: column !important; gap: 6px !important; text-align: center !important; }
+          .screener-new-banner { margin: 0 12px 8px !important; }
+          .detail-panel { width: 100% !important; max-width: 100% !important; }
+        }
       `}</style>
 
       {/* ─── Ambient Background ─── */}
@@ -278,17 +285,17 @@ export default function ScreenerClient() {
       </div>
 
       {/* ─── HEADER ─── */}
-      <header style={{ padding: "0 32px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--b1)", background: "rgba(10,11,16,.88)", backdropFilter: "blur(24px) saturate(180%)", position: "sticky", top: 0, zIndex: 100 }}>
+      <header className="screener-header" style={{ padding: "0 32px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--b1)", background: "rgba(10,11,16,.88)", backdropFilter: "blur(24px) saturate(180%)", position: "sticky", top: 0, zIndex: 100 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <a href="/dashboard" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none", color: "var(--t1)" }}>
             <span style={{ fontSize: 15, fontWeight: 800, fontFamily: "var(--m)", letterSpacing: "-.02em" }}>
               agent<span style={{ color: "var(--g)" }}>screener</span>
             </span>
           </a>
-          <div style={{ height: 20, width: 1, background: "var(--b2)" }} />
-          <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: "var(--t2)", letterSpacing: ".06em", padding: "3px 10px", borderRadius: 4, background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.06)" }}>SCREENER</span>
+          <div className="screener-badge" style={{ height: 20, width: 1, background: "var(--b2)" }} />
+          <span className="screener-badge" style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: "var(--t2)", letterSpacing: ".06em", padding: "3px 10px", borderRadius: 4, background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.06)" }}>SCREENER</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div className="screener-header-right" style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {/* Scanning indicator */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 14px", borderRadius: 4, background: "rgba(255,255,255,.02)", border: "1px solid rgba(255,255,255,.06)" }}>
             <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#2DD4BF", animation: "lp 2s ease-in-out infinite" }} />
@@ -301,13 +308,13 @@ export default function ScreenerClient() {
             <span style={{ display: "inline-block", fontSize: 14, animation: refreshing ? "spin .5s linear infinite" : "none" }}>⟳</span>
             Refresh
           </button>
-          <a href="/dashboard" className="link-hover" style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid var(--b1)", color: "var(--t2)", fontSize: 12, fontWeight: 600 }}>Dashboard</a>
+          <a href="/dashboard" className="link-hover dash-link" style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid var(--b1)", color: "var(--t2)", fontSize: 12, fontWeight: 600 }}>Dashboard</a>
         </div>
       </header>
 
       {/* ─── HERO STATS ─── */}
-      <div style={{ padding: "20px 32px", position: "relative", zIndex: 1 }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
+      <div className="screener-stats" style={{ padding: "20px 32px", position: "relative", zIndex: 1 }}>
+        <div className="screener-stats" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
           {[
             { label: "Detected Today", value: stats.today, icon: "◈", color: "#2DD4BF" },
             { label: "This Hour", value: stats.this_hour, icon: "⏱", color: "#A78BFA" },
@@ -331,8 +338,8 @@ export default function ScreenerClient() {
       </div>
 
       {/* ─── TOOLBAR ─── */}
-      <div style={{ padding: "0 32px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, position: "relative", zIndex: 1 }}>
-        <div style={{ display: "flex", gap: 6, alignItems: "center", overflowX: "auto", maxWidth: "65%", paddingBottom: 2 }}>
+      <div className="screener-toolbar" style={{ padding: "0 32px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, position: "relative", zIndex: 1 }}>
+        <div className="screener-pills" style={{ display: "flex", gap: 6, alignItems: "center", overflowX: "auto", maxWidth: "65%", paddingBottom: 2 }}>
           <button className={`pill${showSaved ? " on" : ""}`} onClick={() => { setShowSaved(!showSaved); if (!showSaved) setCatFilter("All"); }} style={{ padding: "6px 14px", borderRadius: 4, border: showSaved ? "1px solid rgba(255,255,255,.12)" : "1px solid var(--b1)", background: showSaved ? "rgba(45,212,191,.04)" : "transparent", fontSize: 12, fontWeight: 700, fontFamily: "var(--m)", color: showSaved ? "var(--g)" : "var(--t2)", whiteSpace: "nowrap" }}>
             ★ Saved
             {userVotes.size > 0 && <span style={{ marginLeft: 5, fontSize: 10, opacity: 0.5, fontFamily: "var(--m)" }}>{userVotes.size}</span>}
@@ -345,10 +352,10 @@ export default function ScreenerClient() {
             </button>
           ))}
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-          <div style={{ position: "relative" }}>
+        <div className="screener-search-row" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ position: "relative", flex: 1 }}>
             <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "var(--t3)", pointerEvents: "none" }}>⌕</span>
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search products..." style={{ width: 220, padding: "8px 12px 8px 32px", fontSize: 12, borderRadius: 6, border: "1px solid var(--b1)", background: "var(--s1)", color: "var(--t1)", outline: "none", fontFamily: "var(--m)", transition: "border-color .15s" }} onFocus={(e) => e.target.style.borderColor = "var(--b2)"} onBlur={(e) => e.target.style.borderColor = "var(--b1)"} />
+            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search products..." style={{ width: "100%", padding: "8px 12px 8px 32px", fontSize: 12, borderRadius: 6, border: "1px solid var(--b1)", background: "var(--s1)", color: "var(--t1)", outline: "none", fontFamily: "var(--m)", transition: "border-color .15s" }} onFocus={(e) => e.target.style.borderColor = "var(--b2)"} onBlur={(e) => e.target.style.borderColor = "var(--b1)"} />
           </div>
           <div style={{ display: "flex", borderRadius: 4, border: "1px solid var(--b1)", overflow: "hidden" }}>
             {["feed", "grid"].map((v) => (
@@ -360,7 +367,7 @@ export default function ScreenerClient() {
 
       {/* ─── NEW PRODUCTS BANNER ─── */}
       {newCount > 0 && (
-        <div style={{ position: "sticky", top: 56, zIndex: 50, margin: "0 32px 12px", padding: "10px 20px", borderRadius: 6, background: "rgba(255,255,255,.02)", border: "1px solid rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "space-between", backdropFilter: "blur(12px)", animation: "fi .3s ease" }}>
+        <div className="screener-new-banner" style={{ position: "sticky", top: 56, zIndex: 50, margin: "0 32px 12px", padding: "10px 20px", borderRadius: 6, background: "rgba(255,255,255,.02)", border: "1px solid rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "space-between", backdropFilter: "blur(12px)", animation: "fi .3s ease" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#2DD4BF", animation: "lp 2s ease-in-out infinite" }} />
             <span style={{ fontSize: 12, fontWeight: 600, color: "var(--t1)", fontFamily: "var(--m)" }}>
@@ -374,7 +381,7 @@ export default function ScreenerClient() {
       )}
 
       {/* ─── FEED / GRID ─── */}
-      <div style={{ padding: "0 32px 60px", position: "relative", zIndex: 1 }}>
+      <div className="screener-feed" style={{ padding: "0 32px 60px", position: "relative", zIndex: 1 }}>
         {filtered.length === 0 && showSaved ? (
           <div style={{ padding: "80px 0", textAlign: "center", animation: "fi .5s ease both" }}>
             <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.3 }}>★</div>
@@ -388,14 +395,14 @@ export default function ScreenerClient() {
             {filtered.map((d, i) => <FeedCard key={d.id || d.external_id} item={d} index={i} onSelect={setSelectedItem} voted={userVotes.has(d.id)} onVote={handleVote} />)}
           </div>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 12 }}>
+          <div className="screener-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 12 }}>
             {filtered.map((d, i) => <GridCard key={d.id || d.external_id} item={d} index={i} onSelect={setSelectedItem} voted={userVotes.has(d.id)} onVote={handleVote} />)}
           </div>
         )}
       </div>
 
       {/* ─── FOOTER ─── */}
-      <footer style={{ padding: "20px 32px", borderTop: "1px solid var(--b1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <footer className="screener-footer" style={{ padding: "20px 32px", borderTop: "1px solid var(--b1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <span style={{ fontSize: 10, color: "var(--t3)", fontFamily: "var(--m)", letterSpacing: ".06em" }}>AGENTSCREENER v1.0</span>
           <div style={{ width: 3, height: 3, borderRadius: "50%", background: "var(--t3)" }} />
@@ -445,8 +452,6 @@ function UpvoteButton({ item, voted, onVote, size = "sm" }) {
 
 // ─── Feed Card (list view) ───
 function FeedCard({ item, index, onSelect, voted, onVote }) {
-  const confidence = Math.round((item.ai_confidence || 0) * 100);
-  const grade = confidenceGrade(confidence);
   const age = item.discovered_at ? timeAgo(item.discovered_at) : "—";
   const isVeryNew = item.discovered_at && (Date.now() - new Date(item.discovered_at).getTime()) < 120_000;
   const isNew = item.discovered_at && (Date.now() - new Date(item.discovered_at).getTime()) < 600_000;
@@ -460,15 +465,6 @@ function FeedCard({ item, index, onSelect, voted, onVote }) {
       ...(isVeryNew ? { animation: `fi .35s ease ${Math.min(index * 0.04, 0.6)}s both, new-glow 2s ease-in-out infinite` } : {}),
     }}>
       <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
-        {/* Confidence bar */}
-        <div style={{ width: 44, display: "flex", flexDirection: "column", alignItems: "center", gap: 2, flexShrink: 0, paddingTop: 2 }}>
-          <span style={{ fontSize: 13, fontWeight: 800, fontFamily: "var(--m)", color: grade.color }}>{grade.label}</span>
-          <div style={{ width: "100%", height: 3, borderRadius: 1, background: "rgba(255,255,255,.06)", overflow: "hidden" }}>
-            <div style={{ width: `${confidence}%`, height: "100%", background: grade.color, borderRadius: 1, transition: "width .3s ease" }} />
-          </div>
-          <span style={{ fontSize: 8, fontFamily: "var(--m)", color: "var(--t3)" }}>{confidence}%</span>
-        </div>
-
         {/* Content */}
         <div style={{ flex: 1, minWidth: 0 }}>
           {/* Title row */}
@@ -520,8 +516,6 @@ function FeedCard({ item, index, onSelect, voted, onVote }) {
 
 // ─── Grid Card ───
 function GridCard({ item, index, onSelect, voted, onVote }) {
-  const confidence = Math.round((item.ai_confidence || 0) * 100);
-  const grade = confidenceGrade(confidence);
   const isVeryNew = item.discovered_at && (Date.now() - new Date(item.discovered_at).getTime()) < 120_000;
   const isNew = item.discovered_at && (Date.now() - new Date(item.discovered_at).getTime()) < 600_000;
 
@@ -534,9 +528,6 @@ function GridCard({ item, index, onSelect, voted, onVote }) {
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 6, background: grade.bg, border: `1px solid ${grade.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span style={{ fontSize: 14, fontWeight: 800, fontFamily: "var(--m)", color: grade.color }}>{grade.label}</span>
-          </div>
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <span style={{ fontSize: 14, fontWeight: 700, color: "var(--t1)", letterSpacing: "-.01em" }}>{formatName(item.name)}</span>
@@ -591,8 +582,6 @@ function GridCard({ item, index, onSelect, voted, onVote }) {
 function DetailPanel({ item, onClose, voted, onVote }) {
   if (!item) return null;
 
-  const confidence = Math.round((item.ai_confidence || 0) * 100);
-  const grade = confidenceGrade(confidence);
   const repoPath = extractRepoPath(item);
   const sl = sourceLabel(item.url);
 
@@ -632,22 +621,10 @@ function DetailPanel({ item, onClose, voted, onVote }) {
           </button>
         </div>
 
-        {/* Badges + Confidence */}
+        {/* Badges */}
         <div style={{ padding: "16px 24px", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", borderBottom: "1px solid rgba(255,255,255,.04)" }}>
           {sl && <span style={{ padding: "4px 12px", borderRadius: 4, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)", fontSize: 11, fontWeight: 600, color: "rgba(242,242,247,.65)", fontFamily: "var(--m)" }}>{sl}</span>}
           {item.category && <span style={{ padding: "4px 12px", borderRadius: 4, background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.06)", fontSize: 11, fontWeight: 600, color: "var(--t2)", fontFamily: "var(--m)" }}>{item.category}</span>}
-          <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
-              <span style={{ fontSize: 18, fontWeight: 800, fontFamily: "var(--m)", color: grade.color }}>{grade.label}</span>
-              <div style={{ width: 36, height: 3, borderRadius: 1, background: "rgba(255,255,255,.06)", overflow: "hidden" }}>
-                <div style={{ width: `${confidence}%`, height: "100%", background: grade.color, borderRadius: 1 }} />
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: grade.color, fontFamily: "var(--m)" }}>{confidence}%</div>
-              <div style={{ fontSize: 9, color: "rgba(242,242,247,.38)", letterSpacing: ".04em", fontFamily: "var(--m)" }}>CONFIDENCE</div>
-            </div>
-          </div>
         </div>
 
         {/* Author */}
