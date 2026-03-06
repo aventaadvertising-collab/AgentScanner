@@ -439,6 +439,7 @@ export default function AgentScreener() {
         {/* Mobile header buttons */}
         <div className="dash-header-mobile" style={{ display: "none", alignItems: "center", gap: 8 }}>
           <a href="/screener" style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,.1)", background: "rgba(255,255,255,.03)", color: "var(--t2)", fontSize: 11, fontWeight: 700, textDecoration: "none", fontFamily: "var(--f)" }}>Screener</a>
+          <a href="/activity" style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,.1)", background: "rgba(255,255,255,.03)", color: "var(--t2)", fontSize: 11, fontWeight: 700, textDecoration: "none", fontFamily: "var(--f)" }}>Activity</a>
         </div>
         <div className="dash-header-right" style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 600, color: "var(--t3)" }}>
@@ -447,6 +448,7 @@ export default function AgentScreener() {
           </div>
           <div style={{ width: 1, height: 18, background: "var(--b2)" }} />
           <a href="/screener" style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,.1)", background: "rgba(255,255,255,.03)", color: "var(--t2)", fontSize: 11, fontWeight: 700, textDecoration: "none", fontFamily: "var(--f)" }}>Screener</a>
+          <a href="/activity" style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,.1)", background: "rgba(255,255,255,.03)", color: "var(--t2)", fontSize: 11, fontWeight: 700, textDecoration: "none", fontFamily: "var(--f)" }}>Activity</a>
           <button onClick={() => setApply(true)} style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,.1)", background: "rgba(255,255,255,.03)", color: "var(--t2)", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "var(--f)" }}>+ Submit Product</button>
           <div style={{ width: 1, height: 18, background: "var(--b2)" }} />
           {user ? (
