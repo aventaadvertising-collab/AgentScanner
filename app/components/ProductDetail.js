@@ -63,7 +63,7 @@ export function VMeter({ v }) {
 }
 
 export function NewBadge() {
-  return <span style={{ fontSize: 7, padding: "2px 6px", borderRadius: 3, background: "rgba(20,184,166,.08)", color: "var(--g)", fontWeight: 800, letterSpacing: ".06em", border: "1px solid rgba(20,184,166,.15)" }}>NEW</span>;
+  return <span style={{ fontSize: 7, padding: "2px 6px", borderRadius: 3, background: "rgba(45,212,191,.04)", color: "var(--g)", fontWeight: 800, letterSpacing: ".06em", border: "1px solid rgba(255,255,255,.08)" }}>NEW</span>;
 }
 
 function ExtLink({ href, children, style: s = {} }) {

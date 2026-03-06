@@ -227,7 +227,7 @@ export default function ScreenerClient() {
   }, [discoveries]);
 
   return (
-    <div style={{ "--bg": "#0A0B10", "--s1": "#12141C", "--s2": "#1A1D28", "--b1": "rgba(45,212,191,.06)", "--b2": "rgba(45,212,191,.12)", "--b3": "rgba(45,212,191,.18)", "--t1": "#F2F2F7", "--t2": "rgba(242,242,247,.65)", "--t3": "rgba(242,242,247,.38)", "--g": "#2DD4BF", "--gg": "rgba(45,212,191,.2)", "--gd": "rgba(45,212,191,.08)", "--em": "#2DD4BF", "--m": "'SF Mono', 'JetBrains Mono', 'Fira Code', monospace", "--f": "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif", minHeight: "100vh", background: "var(--bg)", color: "var(--t1)", fontFamily: "var(--f)" }}>
+    <div style={{ "--bg": "#0A0B10", "--s1": "#12141C", "--s2": "#1A1D28", "--b1": "rgba(255,255,255,.06)", "--b2": "rgba(255,255,255,.10)", "--b3": "rgba(255,255,255,.14)", "--t1": "#F2F2F7", "--t2": "rgba(242,242,247,.6)", "--t3": "rgba(242,242,247,.35)", "--g": "#2DD4BF", "--gg": "rgba(45,212,191,.1)", "--gd": "rgba(45,212,191,.04)", "--em": "#2DD4BF", "--m": "'SF Mono', 'JetBrains Mono', 'Fira Code', monospace", "--f": "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif", minHeight: "100vh", background: "var(--bg)", color: "var(--t1)", fontFamily: "var(--f)" }}>
 
       <style suppressHydrationWarning>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
@@ -235,25 +235,25 @@ export default function ScreenerClient() {
         @keyframes fi-scale { from { opacity: 0; transform: scale(.96) } to { opacity: 1; transform: scale(1) } }
         @keyframes lp { 0%,100% { opacity: .35 } 50% { opacity: 1 } }
         @keyframes sl { 0% { transform: translateX(-100%) } 100% { transform: translateX(200%) } }
-        @keyframes glow-pulse { 0%,100% { box-shadow: 0 0 20px rgba(45,212,191,.1) } 50% { box-shadow: 0 0 40px rgba(45,212,191,.2) } }
+        @keyframes glow-pulse { 0%,100% { box-shadow: 0 0 15px rgba(45,212,191,.03) } 50% { box-shadow: 0 0 25px rgba(45,212,191,.06) } }
         @keyframes scan-line { 0% { transform: translateX(-100%) } 100% { transform: translateX(200%) } }
         @keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
         @keyframes float { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-6px) } }
         @keyframes ring-rotate { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
         @keyframes fade-in { from { opacity: 0 } to { opacity: 1 } }
         @keyframes slide-in-right { from { transform: translateX(100%) } to { transform: translateX(0) } }
-        @keyframes new-glow { 0%,100% { box-shadow: inset 3px 0 12px -4px rgba(45,212,191,.08) } 50% { box-shadow: inset 3px 0 12px -4px rgba(45,212,191,.25) } }
+        @keyframes new-glow { 0%,100% { box-shadow: inset 3px 0 12px -4px rgba(45,212,191,.04) } 50% { box-shadow: inset 3px 0 12px -4px rgba(45,212,191,.1) } }
         @keyframes vote-pop { 0% { transform: scale(1) } 50% { transform: scale(1.3) } 100% { transform: scale(1) } }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        ::selection { background: rgba(45,212,191,.25); }
+        ::selection { background: rgba(45,212,191,.12); }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.15); }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.06); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.12); }
         .card { transition: all .2s cubic-bezier(.4,0,.2,1); border: 1px solid var(--b1); border-left: 2px solid transparent; cursor: pointer; position: relative; }
-        .card:hover { border-left-color: var(--g); background: rgba(45,212,191,.015) !important; box-shadow: inset 0 1px 0 0 rgba(45,212,191,.08), 0 4px 24px rgba(0,0,0,.2); }
-        .card::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--g), transparent); opacity: 0; transition: opacity .25s; pointer-events: none; }
-        .card:hover::after { opacity: .5; }
+        .card:hover { border-left-color: rgba(45,212,191,.4); background: rgba(255,255,255,.015) !important; box-shadow: 0 2px 16px rgba(0,0,0,.15); }
+        .card::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,.06), transparent); opacity: 0; transition: opacity .25s; pointer-events: none; }
+        .card:hover::after { opacity: 1; }
         .pill { transition: all .15s; cursor: pointer; user-select: none; }
         .pill:hover { background: rgba(255,255,255,.06) !important; }
         .pill.on { background: var(--gd) !important; border-color: var(--gg) !important; color: var(--g) !important; }
@@ -262,20 +262,19 @@ export default function ScreenerClient() {
         .ghost-btn { transition: all .15s; cursor: pointer; border: 1px solid var(--b1); background: transparent; }
         .ghost-btn:hover { background: rgba(255,255,255,.04); border-color: var(--b2); }
         .stat-card { background: var(--s1); border: 1px solid var(--b1); border-radius: 10px; padding: 14px 18px; position: relative; overflow: hidden; }
-        .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(45,212,191,.08), transparent); }
+        .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,.04), transparent); }
         .detail-panel::-webkit-scrollbar { width: 4px; }
         .detail-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 2px; }
         .vote-btn { transition: all .15s; cursor: pointer; border: none; background: transparent; }
-        .vote-btn:hover { background: rgba(45,212,191,.06) !important; }
+        .vote-btn:hover { background: rgba(255,255,255,.04) !important; }
         .vote-btn:active .vote-arrow { animation: vote-pop .2s ease; }
       `}</style>
 
       {/* ─── Ambient Background ─── */}
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
-        <div style={{ position: "absolute", top: "-20%", left: "20%", width: "40vw", height: "40vw", borderRadius: "50%", background: "radial-gradient(circle, rgba(45,212,191,.04) 0%, transparent 70%)", filter: "blur(60px)" }} />
-        <div style={{ position: "absolute", top: "30%", right: "10%", width: "30vw", height: "30vw", borderRadius: "50%", background: "radial-gradient(circle, rgba(167,139,250,.03) 0%, transparent 70%)", filter: "blur(60px)" }} />
-        <div style={{ position: "absolute", bottom: "10%", left: "40%", width: "35vw", height: "35vw", borderRadius: "50%", background: "radial-gradient(circle, rgba(45,212,191,.02) 0%, transparent 70%)", filter: "blur(60px)" }} />
-        <div style={{ position: "absolute", inset: 0, opacity: 0.03, backgroundImage: "radial-gradient(circle, rgba(45,212,191,.5) 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
+        <div style={{ position: "absolute", top: "-20%", left: "20%", width: "40vw", height: "40vw", borderRadius: "50%", background: "radial-gradient(circle, rgba(45,212,191,.02) 0%, transparent 70%)", filter: "blur(80px)" }} />
+        <div style={{ position: "absolute", top: "30%", right: "10%", width: "30vw", height: "30vw", borderRadius: "50%", background: "radial-gradient(circle, rgba(167,139,250,.015) 0%, transparent 70%)", filter: "blur(80px)" }} />
+        <div style={{ position: "absolute", bottom: "10%", left: "40%", width: "35vw", height: "35vw", borderRadius: "50%", background: "radial-gradient(circle, rgba(45,212,191,.01) 0%, transparent 70%)", filter: "blur(80px)" }} />
       </div>
 
       {/* ─── HEADER ─── */}
@@ -287,15 +286,15 @@ export default function ScreenerClient() {
             </span>
           </a>
           <div style={{ height: 20, width: 1, background: "var(--b2)" }} />
-          <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: "var(--g)", letterSpacing: ".06em", padding: "3px 10px", borderRadius: 4, background: "var(--gd)", border: "1px solid rgba(45,212,191,.15)" }}>SCREENER</span>
+          <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: "var(--t2)", letterSpacing: ".06em", padding: "3px 10px", borderRadius: 4, background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.06)" }}>SCREENER</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {/* Scanning indicator */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 14px", borderRadius: 4, background: "rgba(45,212,191,.04)", border: "1px solid rgba(45,212,191,.1)" }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2DD4BF", animation: "lp 1.5s ease-in-out infinite", boxShadow: "0 0 8px rgba(45,212,191,.5)" }} />
-            <span style={{ fontSize: 10, fontWeight: 700, color: "#2DD4BF", fontFamily: "var(--m)", letterSpacing: ".04em" }}>SCANNING</span>
-            <div style={{ width: 40, height: 3, borderRadius: 1, background: "rgba(45,212,191,.1)", overflow: "hidden" }}>
-              <div style={{ width: "30%", height: "100%", background: "linear-gradient(90deg, transparent, #2DD4BF, transparent)", animation: "scan-line 2s ease-in-out infinite" }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 14px", borderRadius: 4, background: "rgba(255,255,255,.02)", border: "1px solid rgba(255,255,255,.06)" }}>
+            <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#2DD4BF", animation: "lp 2s ease-in-out infinite" }} />
+            <span style={{ fontSize: 10, fontWeight: 600, color: "var(--t3)", fontFamily: "var(--m)", letterSpacing: ".04em" }}>LIVE</span>
+            <div style={{ width: 30, height: 2, borderRadius: 1, background: "rgba(255,255,255,.06)", overflow: "hidden" }}>
+              <div style={{ width: "30%", height: "100%", background: "rgba(45,212,191,.4)", animation: "scan-line 2s ease-in-out infinite" }} />
             </div>
           </div>
           <button className="ghost-btn" onClick={handleRefresh} disabled={refreshing} style={{ padding: "6px 14px", borderRadius: 6, color: "var(--t2)", fontSize: 12, fontWeight: 600, fontFamily: "var(--m)", display: "flex", alignItems: "center", gap: 6, opacity: refreshing ? 0.5 : 1 }}>
@@ -334,7 +333,7 @@ export default function ScreenerClient() {
       {/* ─── TOOLBAR ─── */}
       <div style={{ padding: "0 32px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, position: "relative", zIndex: 1 }}>
         <div style={{ display: "flex", gap: 6, alignItems: "center", overflowX: "auto", maxWidth: "65%", paddingBottom: 2 }}>
-          <button className={`pill${showSaved ? " on" : ""}`} onClick={() => { setShowSaved(!showSaved); if (!showSaved) setCatFilter("All"); }} style={{ padding: "6px 14px", borderRadius: 4, border: showSaved ? "1px solid rgba(45,212,191,.25)" : "1px solid var(--b1)", background: showSaved ? "rgba(45,212,191,.08)" : "transparent", fontSize: 12, fontWeight: 700, fontFamily: "var(--m)", color: showSaved ? "var(--g)" : "var(--t2)", whiteSpace: "nowrap" }}>
+          <button className={`pill${showSaved ? " on" : ""}`} onClick={() => { setShowSaved(!showSaved); if (!showSaved) setCatFilter("All"); }} style={{ padding: "6px 14px", borderRadius: 4, border: showSaved ? "1px solid rgba(255,255,255,.12)" : "1px solid var(--b1)", background: showSaved ? "rgba(45,212,191,.04)" : "transparent", fontSize: 12, fontWeight: 700, fontFamily: "var(--m)", color: showSaved ? "var(--g)" : "var(--t2)", whiteSpace: "nowrap" }}>
             ★ Saved
             {userVotes.size > 0 && <span style={{ marginLeft: 5, fontSize: 10, opacity: 0.5, fontFamily: "var(--m)" }}>{userVotes.size}</span>}
           </button>
@@ -353,7 +352,7 @@ export default function ScreenerClient() {
           </div>
           <div style={{ display: "flex", borderRadius: 4, border: "1px solid var(--b1)", overflow: "hidden" }}>
             {["feed", "grid"].map((v) => (
-              <button key={v} onClick={() => setView(v)} style={{ padding: "6px 10px", border: "none", background: view === v ? "rgba(45,212,191,.06)" : "transparent", color: view === v ? "var(--g)" : "var(--t3)", fontSize: 12, cursor: "pointer", transition: "all .12s", fontFamily: "var(--m)" }}>{v === "feed" ? "☰" : "⊞"}</button>
+              <button key={v} onClick={() => setView(v)} style={{ padding: "6px 10px", border: "none", background: view === v ? "rgba(255,255,255,.06)" : "transparent", color: view === v ? "var(--t1)" : "var(--t3)", fontSize: 12, cursor: "pointer", transition: "all .12s", fontFamily: "var(--m)" }}>{v === "feed" ? "☰" : "⊞"}</button>
             ))}
           </div>
         </div>
@@ -361,14 +360,14 @@ export default function ScreenerClient() {
 
       {/* ─── NEW PRODUCTS BANNER ─── */}
       {newCount > 0 && (
-        <div style={{ position: "sticky", top: 56, zIndex: 50, margin: "0 32px 12px", padding: "10px 20px", borderRadius: 6, background: "rgba(45,212,191,.04)", border: "1px solid rgba(45,212,191,.12)", display: "flex", alignItems: "center", justifyContent: "space-between", backdropFilter: "blur(12px)", animation: "fi .3s ease" }}>
+        <div style={{ position: "sticky", top: 56, zIndex: 50, margin: "0 32px 12px", padding: "10px 20px", borderRadius: 6, background: "rgba(255,255,255,.02)", border: "1px solid rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "space-between", backdropFilter: "blur(12px)", animation: "fi .3s ease" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2DD4BF", animation: "lp 1.5s ease-in-out infinite" }} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: "#2DD4BF", fontFamily: "var(--m)" }}>
+            <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#2DD4BF", animation: "lp 2s ease-in-out infinite" }} />
+            <span style={{ fontSize: 12, fontWeight: 600, color: "var(--t1)", fontFamily: "var(--m)" }}>
               {newCount} new product{newCount > 1 ? "s" : ""} discovered
             </span>
           </div>
-          <button onClick={() => { setNewCount(0); window.scrollTo({ top: 0, behavior: "smooth" }); }} style={{ padding: "5px 14px", borderRadius: 4, border: "1px solid rgba(45,212,191,.2)", background: "rgba(45,212,191,.08)", color: "#2DD4BF", fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", cursor: "pointer", letterSpacing: ".04em" }}>
+          <button onClick={() => { setNewCount(0); window.scrollTo({ top: 0, behavior: "smooth" }); }} style={{ padding: "5px 14px", borderRadius: 4, border: "1px solid rgba(255,255,255,.1)", background: "rgba(255,255,255,.04)", color: "var(--t1)", fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", cursor: "pointer", letterSpacing: ".04em" }}>
             SHOW ↑
           </button>
         </div>
@@ -421,8 +420,8 @@ function UpvoteButton({ item, voted, onVote, size = "sm" }) {
       style={{
         display: "flex", flexDirection: "column", alignItems: "center", gap: 1,
         padding: isLg ? "8px 14px" : "4px 8px", borderRadius: 4,
-        border: `1px solid ${voted ? "rgba(45,212,191,.25)" : "rgba(255,255,255,.06)"}`,
-        background: voted ? "rgba(45,212,191,.08)" : "transparent",
+        border: `1px solid ${voted ? "rgba(255,255,255,.12)" : "rgba(255,255,255,.06)"}`,
+        background: voted ? "rgba(45,212,191,.04)" : "transparent",
         minWidth: isLg ? 48 : 36,
       }}
     >
@@ -497,7 +496,7 @@ function FeedCard({ item, index, onSelect, voted, onVote }) {
           {/* Metadata row */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             {item.category && (
-              <span style={{ padding: "3px 10px", borderRadius: 4, background: "var(--gd)", border: "1px solid rgba(45,212,191,.12)", fontSize: 11, fontWeight: 600, color: "var(--g)", fontFamily: "var(--m)" }}>{item.category}</span>
+              <span style={{ padding: "3px 10px", borderRadius: 4, background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.06)", fontSize: 11, fontWeight: 600, color: "var(--t2)", fontFamily: "var(--m)" }}>{item.category}</span>
             )}
             {item.language && (
               <span style={{ padding: "3px 10px", borderRadius: 4, background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.06)", fontSize: 11, fontWeight: 600, color: "var(--t2)", fontFamily: "var(--m)" }}>{item.language}</span>
@@ -576,7 +575,7 @@ function GridCard({ item, index, onSelect, voted, onVote }) {
       {/* Footer */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          {item.category && <span style={{ padding: "3px 10px", borderRadius: 4, background: "var(--gd)", border: "1px solid rgba(45,212,191,.12)", fontSize: 10, fontWeight: 600, color: "var(--g)", fontFamily: "var(--m)" }}>{item.category}</span>}
+          {item.category && <span style={{ padding: "3px 10px", borderRadius: 4, background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.06)", fontSize: 10, fontWeight: 600, color: "var(--t2)", fontFamily: "var(--m)" }}>{item.category}</span>}
           <UpvoteButton item={item} voted={voted} onVote={onVote} />
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -611,10 +610,10 @@ function DetailPanel({ item, onClose, voted, onVote }) {
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", backdropFilter: "blur(4px)", zIndex: 200, animation: "fade-in .2s ease" }} />
 
       {/* Panel */}
-      <div className="detail-panel" style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 460, maxWidth: "90vw", background: "#12141C", borderLeft: "1px solid rgba(45,212,191,.08)", zIndex: 201, overflowY: "auto", animation: "slide-in-right .25s cubic-bezier(.4,0,.2,1)", boxShadow: "-20px 0 60px rgba(0,0,0,.4)" }}>
+      <div className="detail-panel" style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 460, maxWidth: "90vw", background: "#12141C", borderLeft: "1px solid rgba(255,255,255,.06)", zIndex: 201, overflowY: "auto", animation: "slide-in-right .25s cubic-bezier(.4,0,.2,1)", boxShadow: "-20px 0 60px rgba(0,0,0,.4)" }}>
 
         {/* Header */}
-        <div style={{ padding: "20px 24px", borderBottom: "1px solid rgba(45,212,191,.06)", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div style={{ padding: "20px 24px", borderBottom: "1px solid rgba(255,255,255,.04)", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <h2 style={{ fontSize: 20, fontWeight: 800, color: "#F2F2F7", margin: 0, letterSpacing: "-.02em", lineHeight: 1.3 }}>
               {formatName(item.name)}
@@ -634,9 +633,9 @@ function DetailPanel({ item, onClose, voted, onVote }) {
         </div>
 
         {/* Badges + Confidence */}
-        <div style={{ padding: "16px 24px", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", borderBottom: "1px solid rgba(45,212,191,.06)" }}>
+        <div style={{ padding: "16px 24px", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", borderBottom: "1px solid rgba(255,255,255,.04)" }}>
           {sl && <span style={{ padding: "4px 12px", borderRadius: 4, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)", fontSize: 11, fontWeight: 600, color: "rgba(242,242,247,.65)", fontFamily: "var(--m)" }}>{sl}</span>}
-          {item.category && <span style={{ padding: "4px 12px", borderRadius: 4, background: "rgba(45,212,191,.08)", border: "1px solid rgba(45,212,191,.12)", fontSize: 11, fontWeight: 600, color: "#2DD4BF", fontFamily: "var(--m)" }}>{item.category}</span>}
+          {item.category && <span style={{ padding: "4px 12px", borderRadius: 4, background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.06)", fontSize: 11, fontWeight: 600, color: "var(--t2)", fontFamily: "var(--m)" }}>{item.category}</span>}
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
               <span style={{ fontSize: 18, fontWeight: 800, fontFamily: "var(--m)", color: grade.color }}>{grade.label}</span>
@@ -653,8 +652,8 @@ function DetailPanel({ item, onClose, voted, onVote }) {
 
         {/* Author */}
         {item.author && (
-          <div style={{ padding: "14px 24px", borderBottom: "1px solid rgba(45,212,191,.06)", display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: 6, background: "rgba(45,212,191,.06)", border: "1px solid rgba(45,212,191,.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#2DD4BF", fontFamily: "var(--m)" }}>
+          <div style={{ padding: "14px 24px", borderBottom: "1px solid rgba(255,255,255,.04)", display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 28, height: 28, borderRadius: 6, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "var(--t2)", fontFamily: "var(--m)" }}>
               {item.author[0]?.toUpperCase()}
             </div>
             <div style={{ flex: 1 }}>
@@ -670,7 +669,7 @@ function DetailPanel({ item, onClose, voted, onVote }) {
         )}
 
         {/* Description */}
-        <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(45,212,191,.06)" }}>
+        <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(255,255,255,.04)" }}>
           <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "rgba(242,242,247,.38)", marginBottom: 8, fontFamily: "var(--m)" }}>Description</div>
           <div style={{ fontSize: 13, color: "rgba(242,242,247,.65)", lineHeight: 1.65 }}>
             {item.description || "No description available."}
@@ -679,7 +678,7 @@ function DetailPanel({ item, onClose, voted, onVote }) {
 
         {/* Metrics grid */}
         {metrics.length > 0 && (
-          <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(45,212,191,.06)" }}>
+          <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(255,255,255,.04)" }}>
             <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "rgba(242,242,247,.38)", marginBottom: 10, fontFamily: "var(--m)" }}>Metrics</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
               {metrics.map((m, i) => (
@@ -694,7 +693,7 @@ function DetailPanel({ item, onClose, voted, onVote }) {
 
         {/* Topics */}
         {item.topics?.length > 0 && (
-          <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(45,212,191,.06)" }}>
+          <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(255,255,255,.04)" }}>
             <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "rgba(242,242,247,.38)", marginBottom: 8, fontFamily: "var(--m)" }}>Topics</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {item.topics.map((t, i) => (
@@ -706,18 +705,18 @@ function DetailPanel({ item, onClose, voted, onVote }) {
 
         {/* AI Keywords */}
         {item.ai_keywords?.length > 0 && (
-          <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(45,212,191,.06)" }}>
+          <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(255,255,255,.04)" }}>
             <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "rgba(242,242,247,.38)", marginBottom: 8, fontFamily: "var(--m)" }}>AI Classification</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {item.ai_keywords.map((kw, i) => (
-                <span key={i} style={{ padding: "4px 10px", borderRadius: 4, background: "rgba(45,212,191,.06)", border: "1px solid rgba(45,212,191,.1)", fontSize: 11, fontWeight: 600, color: "#2DD4BF", fontFamily: "var(--m)" }}>{kw}</span>
+                <span key={i} style={{ padding: "4px 10px", borderRadius: 4, background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.06)", fontSize: 11, fontWeight: 600, color: "var(--t2)", fontFamily: "var(--m)" }}>{kw}</span>
               ))}
             </div>
           </div>
         )}
 
         {/* Timestamps */}
-        <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(45,212,191,.06)", display: "flex", gap: 24 }}>
+        <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(255,255,255,.04)", display: "flex", gap: 24 }}>
           <div>
             <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "rgba(242,242,247,.38)", marginBottom: 3, fontFamily: "var(--m)" }}>Discovered</div>
             <div style={{ fontSize: 12, fontWeight: 600, color: "#F2F2F7", fontFamily: "var(--m)" }}>{item.discovered_at ? timeAgo(item.discovered_at) : "—"}</div>
@@ -754,11 +753,11 @@ function EmptyState() {
   return (
     <div style={{ padding: "100px 0", textAlign: "center", animation: "fi .5s ease both" }}>
       <div style={{ position: "relative", display: "inline-block", marginBottom: 32, width: 100, height: 100 }}>
-        <div style={{ position: "absolute", inset: 10, borderRadius: "50%", background: "linear-gradient(135deg, rgba(45,212,191,.1), rgba(167,139,250,.05))", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ position: "absolute", inset: 10, borderRadius: "50%", background: "linear-gradient(135deg, rgba(255,255,255,.04), rgba(167,139,250,.02))", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <span style={{ fontSize: 32, filter: "saturate(0) brightness(1.2)", animation: "float 3s ease-in-out infinite" }}>⌕</span>
         </div>
-        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: "1px solid rgba(45,212,191,.15)", animation: "ring-rotate 8s linear infinite" }}>
-          <div style={{ position: "absolute", top: -3, left: "50%", transform: "translateX(-50%)", width: 6, height: 6, borderRadius: "50%", background: "#2DD4BF", boxShadow: "0 0 10px rgba(45,212,191,.5)" }} />
+        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: "1px solid rgba(255,255,255,.08)", animation: "ring-rotate 8s linear infinite" }}>
+          <div style={{ position: "absolute", top: -3, left: "50%", transform: "translateX(-50%)", width: 5, height: 5, borderRadius: "50%", background: "#2DD4BF" }} />
         </div>
         <div style={{ position: "absolute", inset: -5, borderRadius: "50%", border: "1px dashed rgba(167,139,250,.1)", animation: "ring-rotate 12s linear infinite reverse" }} />
       </div>
@@ -771,7 +770,7 @@ function EmptyState() {
       </div>
 
       <div style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "10px 20px", borderRadius: 6, background: "var(--s1)", border: "1px solid var(--b1)" }}>
-        <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#2DD4BF", animation: "lp 2s ease-in-out infinite", boxShadow: "0 0 8px rgba(45,212,191,.4)" }} />
+        <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#2DD4BF", animation: "lp 2s ease-in-out infinite" }} />
         <span style={{ fontSize: 12, fontWeight: 600, color: "var(--t2)", fontFamily: "var(--m)" }}>Intelligence engine active — awaiting first screening cycle</span>
       </div>
     </div>

@@ -89,7 +89,7 @@ export default function LandingPage() {
   const CATEGORIES = ["Code & Dev Tools", "AI Agents", "Agent Frameworks", "Foundation Models", "Video Generation", "Image Generation", "Search & Research", "Audio & Voice", "Inference & Serving", "Browser Use", "Data & Analytics", "Security AI"];
 
   return (
-    <div style={{ "--bg": "#0A0B10", "--s1": "#12141C", "--s2": "#1A1D28", "--b1": "rgba(45,212,191,.06)", "--b2": "rgba(45,212,191,.12)", "--b3": "rgba(45,212,191,.18)", "--t1": "#F2F2F7", "--t2": "rgba(242,242,247,.65)", "--t3": "rgba(242,242,247,.38)", "--g": "#2DD4BF", "--gg": "rgba(45,212,191,.2)", "--gd": "rgba(45,212,191,.08)", "--m": "'SF Mono', 'JetBrains Mono', 'Fira Code', monospace", "--f": "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif", minHeight: "100vh", background: "var(--bg)", color: "var(--t1)", fontFamily: "var(--f)" }}>
+    <div style={{ "--bg": "#0A0B10", "--s1": "#12141C", "--s2": "#1A1D28", "--b1": "rgba(255,255,255,.06)", "--b2": "rgba(255,255,255,.10)", "--b3": "rgba(255,255,255,.14)", "--t1": "#F2F2F7", "--t2": "rgba(242,242,247,.6)", "--t3": "rgba(242,242,247,.35)", "--g": "#2DD4BF", "--gg": "rgba(45,212,191,.1)", "--gd": "rgba(45,212,191,.04)", "--m": "'SF Mono', 'JetBrains Mono', 'Fira Code', monospace", "--f": "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif", minHeight: "100vh", background: "var(--bg)", color: "var(--t1)", fontFamily: "var(--f)" }}>
 
       <style suppressHydrationWarning>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
@@ -98,22 +98,22 @@ export default function LandingPage() {
         @keyframes lp { 0%,100% { opacity: .35 } 50% { opacity: 1 } }
         @keyframes marquee { 0% { transform: translateX(0) } 100% { transform: translateX(-50%) } }
         @keyframes feed-in { from { opacity: 0; transform: translateX(12px) } to { opacity: 1; transform: translateX(0) } }
-        @keyframes glow-soft { 0%,100% { box-shadow: 0 0 20px rgba(45,212,191,.06) } 50% { box-shadow: 0 0 40px rgba(45,212,191,.12) } }
+        @keyframes glow-soft { 0%,100% { box-shadow: 0 0 15px rgba(45,212,191,.02) } 50% { box-shadow: 0 0 25px rgba(45,212,191,.04) } }
         @keyframes scan-line { 0% { transform: translateX(-100%) } 100% { transform: translateX(200%) } }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        ::selection { background: rgba(45,212,191,.25); }
+        ::selection { background: rgba(45,212,191,.12); }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 3px; }
         .link-hover { transition: all .15s; text-decoration: none; }
         .link-hover:hover { color: var(--g) !important; }
         .cta-btn { transition: all .2s cubic-bezier(.4,0,.2,1); }
-        .cta-btn:hover { transform: translateY(-2px); box-shadow: 0 0 40px rgba(45,212,191,.3), 0 12px 40px rgba(0,0,0,.4); }
+        .cta-btn:hover { transform: translateY(-1px); box-shadow: 0 0 20px rgba(45,212,191,.1), 0 8px 24px rgba(0,0,0,.3); }
         .ghost-btn { transition: all .2s; }
-        .ghost-btn:hover { background: rgba(255,255,255,.05) !important; border-color: rgba(45,212,191,.15) !important; }
+        .ghost-btn:hover { background: rgba(255,255,255,.04) !important; border-color: rgba(255,255,255,.12) !important; }
         .bento-card { background: var(--s1); border: 1px solid var(--b1); border-radius: 14px; padding: 28px 26px; position: relative; overflow: hidden; transition: all .25s; }
-        .bento-card:hover { border-color: var(--b2); box-shadow: 0 4px 24px rgba(0,0,0,.2); }
-        .bento-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(45,212,191,.1), transparent); }
+        .bento-card:hover { border-color: var(--b2); box-shadow: 0 2px 16px rgba(0,0,0,.15); }
+        .bento-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,.04), transparent); }
         @media (max-width: 768px) {
           .hero-split { flex-direction: column !important; }
           .hero-left { max-width: 100% !important; }
@@ -126,9 +126,8 @@ export default function LandingPage() {
 
       {/* ─── Ambient Background ─── */}
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
-        <div style={{ position: "absolute", top: "-15%", left: "40%", width: "45vw", height: "45vw", borderRadius: "50%", background: "radial-gradient(circle, rgba(45,212,191,.04) 0%, transparent 70%)", filter: "blur(80px)" }} />
-        <div style={{ position: "absolute", top: "50%", right: "10%", width: "30vw", height: "30vw", borderRadius: "50%", background: "radial-gradient(circle, rgba(167,139,250,.025) 0%, transparent 70%)", filter: "blur(60px)" }} />
-        <div style={{ position: "absolute", inset: 0, opacity: 0.02, backgroundImage: "radial-gradient(circle, rgba(45,212,191,.5) 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
+        <div style={{ position: "absolute", top: "-15%", left: "40%", width: "45vw", height: "45vw", borderRadius: "50%", background: "radial-gradient(circle, rgba(45,212,191,.02) 0%, transparent 70%)", filter: "blur(100px)" }} />
+        <div style={{ position: "absolute", top: "50%", right: "10%", width: "30vw", height: "30vw", borderRadius: "50%", background: "radial-gradient(circle, rgba(167,139,250,.015) 0%, transparent 70%)", filter: "blur(80px)" }} />
       </div>
 
       {/* ─── NAV ─── */}
@@ -149,9 +148,9 @@ export default function LandingPage() {
 
         {/* Left side — headline + CTA */}
         <div className="hero-left" style={{ flex: "1 1 45%", maxWidth: 500, animation: "fi .6s ease both" }}>
-          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "5px 14px", borderRadius: 4, background: "rgba(45,212,191,.04)", border: "1px solid rgba(45,212,191,.1)", marginBottom: 28 }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2DD4BF", animation: "lp 2s ease-in-out infinite", boxShadow: "0 0 8px rgba(45,212,191,.5)" }} />
-            <span style={{ fontSize: 10, fontWeight: 700, color: "#2DD4BF", fontFamily: "var(--m)", letterSpacing: ".06em" }}>LIVE · {liveStats.today || 0} PRODUCTS TODAY</span>
+          <div style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "5px 14px", borderRadius: 4, background: "rgba(255,255,255,.02)", border: "1px solid rgba(255,255,255,.06)", marginBottom: 28 }}>
+            <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#2DD4BF", animation: "lp 2s ease-in-out infinite" }} />
+            <span style={{ fontSize: 10, fontWeight: 600, color: "var(--t3)", fontFamily: "var(--m)", letterSpacing: ".06em" }}>LIVE · {liveStats.today || 0} PRODUCTS TODAY</span>
           </div>
 
           <h1 style={{ fontSize: 52, fontWeight: 900, fontFamily: "var(--f)", lineHeight: 1.05, letterSpacing: "-.04em", marginBottom: 20 }}>
@@ -164,7 +163,7 @@ export default function LandingPage() {
           </p>
 
           <div style={{ display: "flex", gap: 12, marginBottom: 40 }}>
-            <a href="/screener" className="cta-btn" style={{ padding: "14px 36px", borderRadius: 8, background: "#2DD4BF", color: "#0A0B10", fontSize: 15, fontWeight: 800, textDecoration: "none", letterSpacing: ".01em", boxShadow: "0 0 30px rgba(45,212,191,.2), 0 4px 20px rgba(0,0,0,.3)", fontFamily: "var(--m)" }}>
+            <a href="/screener" className="cta-btn" style={{ padding: "14px 36px", borderRadius: 8, background: "#2DD4BF", color: "#0A0B10", fontSize: 15, fontWeight: 800, textDecoration: "none", letterSpacing: ".01em", boxShadow: "0 4px 16px rgba(0,0,0,.3)", fontFamily: "var(--m)" }}>
               Open Screener
             </a>
             <a href="/dashboard" className="ghost-btn" style={{ padding: "14px 28px", borderRadius: 8, border: "1px solid var(--b2)", background: "transparent", color: "var(--t1)", fontSize: 15, fontWeight: 600, textDecoration: "none" }}>
@@ -193,8 +192,8 @@ export default function LandingPage() {
             {/* Feed header */}
             <div style={{ padding: "14px 20px", borderBottom: "1px solid var(--b1)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
               <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2DD4BF", animation: "lp 1.5s ease-in-out infinite", boxShadow: "0 0 6px rgba(45,212,191,.4)" }} />
-                <span style={{ fontSize: 10, fontWeight: 700, color: "#2DD4BF", fontFamily: "var(--m)", letterSpacing: ".08em" }}>LIVE FEED</span>
+                <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#2DD4BF", animation: "lp 2s ease-in-out infinite" }} />
+                <span style={{ fontSize: 10, fontWeight: 600, color: "var(--t3)", fontFamily: "var(--m)", letterSpacing: ".08em" }}>LIVE FEED</span>
               </div>
               <span style={{ fontSize: 10, color: "var(--t3)", fontFamily: "var(--m)" }}>{heroProducts.length > 0 ? "updating in real-time" : "connecting..."}</span>
             </div>
@@ -205,7 +204,7 @@ export default function LandingPage() {
                 const confidence = Math.round((item.ai_confidence || 0) * 100);
                 const grade = confidenceGrade(confidence);
                 return (
-                  <a key={item.id || i} href="/screener" style={{ display: "flex", alignItems: "center", padding: "12px 20px", gap: 14, textDecoration: "none", color: "inherit", transition: "background .15s", animation: `feed-in .4s ease ${i * 0.08}s both` }} onMouseEnter={e => e.currentTarget.style.background = "rgba(45,212,191,.02)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                  <a key={item.id || i} href="/screener" style={{ display: "flex", alignItems: "center", padding: "12px 20px", gap: 14, textDecoration: "none", color: "inherit", transition: "background .15s", animation: `feed-in .4s ease ${i * 0.08}s both` }} onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,.02)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                     {/* Confidence grade */}
                     <div style={{ width: 32, textAlign: "center", flexShrink: 0 }}>
                       <span style={{ fontSize: 14, fontWeight: 800, fontFamily: "var(--m)", color: grade.color }}>{grade.label}</span>
@@ -241,7 +240,7 @@ export default function LandingPage() {
             </div>
 
             {/* Feed footer */}
-            <a href="/screener" style={{ display: "block", padding: "12px 20px", borderTop: "1px solid var(--b1)", textAlign: "center", textDecoration: "none", fontSize: 11, fontWeight: 700, color: "var(--g)", fontFamily: "var(--m)", letterSpacing: ".04em", transition: "background .15s" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(45,212,191,.04)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+            <a href="/screener" style={{ display: "block", padding: "12px 20px", borderTop: "1px solid var(--b1)", textAlign: "center", textDecoration: "none", fontSize: 11, fontWeight: 600, color: "var(--t2)", fontFamily: "var(--m)", letterSpacing: ".04em", transition: "background .15s" }} onMouseEnter={e => e.currentTarget.style.background = "rgba(255,255,255,.02)"} onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
               VIEW ALL {liveStats.today || ""} PRODUCTS →
             </a>
           </div>
@@ -254,7 +253,7 @@ export default function LandingPage() {
           <div style={{ borderTop: "1px solid var(--b1)", borderBottom: "1px solid var(--b1)", padding: "14px 0", background: "rgba(18,20,28,.5)" }}>
             <div style={{ display: "flex", animation: "marquee 40s linear infinite", width: "max-content" }}>
               {[...tickerProducts, ...tickerProducts].map((item, i) => (
-                <a key={i} href="/screener" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 16px", margin: "0 4px", borderRadius: 4, background: "rgba(255,255,255,.02)", border: "1px solid rgba(255,255,255,.04)", textDecoration: "none", whiteSpace: "nowrap", transition: "all .15s", flexShrink: 0 }} onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(45,212,191,.15)"; e.currentTarget.style.background = "rgba(45,212,191,.04)"; }} onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,.04)"; e.currentTarget.style.background = "rgba(255,255,255,.02)"; }}>
+                <a key={i} href="/screener" style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "5px 16px", margin: "0 4px", borderRadius: 4, background: "rgba(255,255,255,.02)", border: "1px solid rgba(255,255,255,.04)", textDecoration: "none", whiteSpace: "nowrap", transition: "all .15s", flexShrink: 0 }} onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,.1)"; e.currentTarget.style.background = "rgba(255,255,255,.04)"; }} onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,.04)"; e.currentTarget.style.background = "rgba(255,255,255,.02)"; }}>
                   <span style={{ fontSize: 11, fontWeight: 600, color: "var(--t2)" }}>{formatName(item.name)}</span>
                   <span style={{ fontSize: 9, fontWeight: 700, color: confidenceGrade(Math.round((item.ai_confidence || 0) * 100)).color, fontFamily: "var(--m)" }}>{confidenceGrade(Math.round((item.ai_confidence || 0) * 100)).label}</span>
                 </a>
@@ -278,7 +277,7 @@ export default function LandingPage() {
                 <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 10px", borderRadius: 6, background: "rgba(255,255,255,.02)", border: "1px solid rgba(255,255,255,.04)" }}>
                   <span style={{ fontSize: 12, color: "var(--g)", opacity: 0.6 }}>{s.icon}</span>
                   <span style={{ fontSize: 11, fontWeight: 600, color: "var(--t2)", flex: 1 }}>{s.name}</span>
-                  <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#2DD4BF", animation: `lp 2s ease-in-out infinite`, animationDelay: `${i * 0.15}s` }} />
+                  <span style={{ width: 4, height: 4, borderRadius: "50%", background: "rgba(45,212,191,.5)", animation: `lp 3s ease-in-out infinite`, animationDelay: `${i * 0.15}s` }} />
                 </div>
               ))}
             </div>
@@ -352,10 +351,10 @@ export default function LandingPage() {
                 VCs, founders, and developers use AgentScreener to discover AI products as they launch. Free, real-time, no signup required.
               </div>
               <div style={{ display: "flex", gap: 12 }}>
-                <a href="/screener" className="cta-btn" style={{ padding: "12px 32px", borderRadius: 8, background: "#2DD4BF", color: "#0A0B10", fontSize: 14, fontWeight: 800, textDecoration: "none", fontFamily: "var(--m)", boxShadow: "0 0 24px rgba(45,212,191,.2)" }}>
+                <a href="/screener" className="cta-btn" style={{ padding: "12px 32px", borderRadius: 8, background: "#2DD4BF", color: "#0A0B10", fontSize: 14, fontWeight: 800, textDecoration: "none", fontFamily: "var(--m)" }}>
                   Open Screener →
                 </a>
-                <a href="/dashboard" className="ghost-btn" style={{ padding: "12px 28px", borderRadius: 8, border: "1px solid var(--b2)", background: "transparent", color: "var(--t1)", fontSize: 14, fontWeight: 600, textDecoration: "none" }}>
+                <a href="/dashboard" className="ghost-btn" style={{ padding: "12px 28px", borderRadius: 8, border: "1px solid rgba(255,255,255,.08)", background: "transparent", color: "var(--t2)", fontSize: 14, fontWeight: 600, textDecoration: "none" }}>
                   View Dashboard
                 </a>
               </div>

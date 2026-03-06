@@ -63,7 +63,7 @@ function ApplyModal({ onClose }) {
   );
 
   const Toggle = ({ label, icon, field }) => (
-    <div onClick={() => u(field, !f[field])} style={{ padding: "12px 14px", borderRadius: 8, cursor: "pointer", background: f[field] ? "var(--gd)" : "var(--s2)", border: `1px solid ${f[field] ? "rgba(0,204,136,.25)" : "var(--b1)"}`, display: "flex", alignItems: "center", justifyContent: "space-between", transition: "all .12s" }}>
+    <div onClick={() => u(field, !f[field])} style={{ padding: "12px 14px", borderRadius: 8, cursor: "pointer", background: f[field] ? "var(--gd)" : "var(--s2)", border: `1px solid ${f[field] ? "rgba(255,255,255,.12)" : "var(--b1)"}`, display: "flex", alignItems: "center", justifyContent: "space-between", transition: "all .12s" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <span style={{ fontSize: 16 }}>{icon}</span>
         <div>
@@ -373,7 +373,7 @@ export default function AgentScreener() {
   }), [enriched]);
 
   return (
-    <div id="app" style={{ "--bg": "#0A0B10", "--s1": "#12141C", "--s2": "rgba(255,255,255,.03)", "--sh": "rgba(255,255,255,.05)", "--b1": "rgba(255,255,255,.08)", "--b2": "rgba(255,255,255,.12)", "--t1": "#F2F2F7", "--t2": "rgba(242,242,247,.65)", "--t3": "rgba(242,242,247,.38)", "--t4": "rgba(242,242,247,.15)", "--g": "#00FFAA", "--gg": "rgba(0,255,170,.2)", "--gd": "rgba(0,255,170,.08)", "--r": "#EF4444", "--y": "#F59E0B", "--up": "#00FFAA", "--dn": "#EF4444", "--m": "'SF Mono', 'JetBrains Mono', 'Fira Code', monospace", "--f": "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif", minHeight: "100vh", background: "var(--bg)", color: "var(--t1)", fontFamily: "var(--f)" }}>
+    <div id="app" style={{ "--bg": "#0A0B10", "--s1": "#12141C", "--s2": "rgba(255,255,255,.03)", "--sh": "rgba(255,255,255,.05)", "--b1": "rgba(255,255,255,.08)", "--b2": "rgba(255,255,255,.12)", "--t1": "#F2F2F7", "--t2": "rgba(242,242,247,.65)", "--t3": "rgba(242,242,247,.38)", "--t4": "rgba(242,242,247,.15)", "--g": "#2DD4BF", "--gg": "rgba(45,212,191,.1)", "--gd": "rgba(45,212,191,.04)", "--r": "#EF4444", "--y": "#F59E0B", "--up": "#2DD4BF", "--dn": "#EF4444", "--m": "'SF Mono', 'JetBrains Mono', 'Fira Code', monospace", "--f": "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif", minHeight: "100vh", background: "var(--bg)", color: "var(--t1)", fontFamily: "var(--f)" }}>
 
       <style suppressHydrationWarning>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
@@ -381,12 +381,12 @@ export default function AgentScreener() {
         @keyframes su { from { opacity: 0; transform: translateY(5px) } to { opacity: 1; transform: translateY(0) } }
         @keyframes lp { 0%,100% { opacity: 1 } 50% { opacity: .3 } }
         @keyframes sl { 0% { transform: translateX(-100%) } 100% { transform: translateX(200%) } }
-        @keyframes glow-pulse { 0%,100% { box-shadow: 0 0 20px rgba(0,255,170,.08) } 50% { box-shadow: 0 0 40px rgba(0,255,170,.15) } }
+        @keyframes glow-pulse { 0%,100% { box-shadow: 0 0 15px rgba(45,212,191,.03) } 50% { box-shadow: 0 0 25px rgba(45,212,191,.06) } }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.15); }
-        ::selection { background: rgba(0,255,170,.3); }
+        ::selection { background: rgba(45,212,191,.15); }
         @keyframes sl { 0% { transform: translateX(-100%) } 100% { transform: translateX(200%) } }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         ::-webkit-scrollbar { width: 4px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 2px; }
@@ -394,10 +394,10 @@ export default function AgentScreener() {
         select option { background: #FFFFFF; }
         .label-xs { font-size: 9px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--t3); }
         .chip { font-size: 9px; padding: 2px 7px; border-radius: 3px; background: rgba(255,255,255,.03); color: var(--t2); font-weight: 600; letter-spacing: .03em; border: 1px solid var(--b1); }
-        .chip-g { background: var(--gd); color: var(--g); border-color: rgba(0,204,136,.15); }
+        .chip-g { background: var(--gd); color: var(--g); border-color: rgba(255,255,255,.08); }
         .card-inner { padding: 14px 16px; border-radius: 8px; background: rgba(255,255,255,.02); border: 1px solid var(--b1); }
         .input { width: 100%; padding: 9px 11px; border-radius: 7px; background: rgba(255,255,255,.03); border: 1px solid var(--b1); color: var(--t1); font-size: 12px; font-family: var(--f); outline: none; transition: border-color .15s; }
-        .input:focus { border-color: rgba(0,204,136,.4); }
+        .input:focus { border-color: rgba(255,255,255,.2); }
         .btn-primary { padding: 9px 24px; border-radius: 7px; border: none; background: var(--g); color: #FFF; font-size: 12px; font-weight: 700; cursor: pointer; font-family: var(--f); letter-spacing: .01em; }
         .btn-primary:hover { opacity: .88; }
         .btn-ghost { padding: 9px 18px; border-radius: 7px; border: 1px solid var(--b1); background: transparent; color: var(--t2); font-size: 12px; font-weight: 600; cursor: pointer; font-family: var(--f); }
@@ -405,7 +405,7 @@ export default function AgentScreener() {
         .btn-close:hover { background: rgba(255,255,255,.06); }
         .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.6); backdrop-filter: blur(20px); display: flex; align-items: center; justify-content: center; z-index: 1000; animation: fi .15s ease; }
         .cat-btn { padding: 5px 11px; border-radius: 5px; border: 1px solid var(--b1); background: transparent; color: var(--t3); font-size: 11px; font-weight: 600; cursor: pointer; font-family: var(--f); transition: all .1s; }
-        .cat-btn.on { border-color: rgba(0,204,136,.25); background: var(--gd); color: var(--g); }
+        .cat-btn.on { border-color: rgba(255,255,255,.12); background: var(--gd); color: var(--g); }
         .row { display: grid; grid-template-columns: 32px 2fr .85fr .85fr .75fr .7fr .55fr 90px 28px; padding: 11px 14px; border-radius: 7px; cursor: pointer; align-items: center; transition: all .1s; border: 1px solid transparent; }
         .row:hover { background: var(--sh); border-color: var(--b2); }
         .row-h { display: grid; grid-template-columns: 32px 2fr .85fr .85fr .75fr .7fr .55fr 90px 28px; padding: 7px 14px; }
@@ -418,22 +418,18 @@ export default function AgentScreener() {
       {/* HEADER */}
       <header style={{ padding: "0 24px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--b1)", position: "sticky", top: 0, background: "rgba(12,13,18,.88)", backdropFilter: "blur(24px) saturate(180%)", zIndex: 100 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 30, height: 30, borderRadius: 8, position: "relative", overflow: "hidden", background: "linear-gradient(135deg, #00FFAA, #00CC88, #00AA77)", display: "flex", alignItems: "center", justifyContent: "center", animation: "glow-pulse 4s ease-in-out infinite" }}>
-            <span style={{ fontSize: 11, fontWeight: 800, color: "#FFF", fontFamily: "var(--m)", letterSpacing: ".02em" }}>AS</span>
-            <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, transparent, rgba(255,255,255,.2), transparent)", animation: "sl 4s ease-in-out infinite" }} />
-          </div>
           <span style={{ fontSize: 15, fontWeight: 800, fontFamily: "var(--m)", letterSpacing: "-.02em" }}>
-            AGENT<span style={{ color: "var(--g)" }}>SCREENER</span>
+            agent<span style={{ color: "var(--g)" }}>screener</span>
           </span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 600, color: "var(--g)" }}>
-            <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--g)", animation: "lp 2s ease-in-out infinite", boxShadow: "0 0 6px var(--gg)" }} />LIVE
+          <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 10, fontWeight: 600, color: "var(--t3)" }}>
+            <span style={{ width: 4, height: 4, borderRadius: "50%", background: "#2DD4BF", animation: "lp 2s ease-in-out infinite" }} />LIVE
             {lastUpdate && <span style={{ fontSize: 9, color: "var(--t3)", fontWeight: 500 }}>{Math.round((Date.now() - lastUpdate.getTime()) / 1000)}s ago</span>}
           </div>
           <div style={{ width: 1, height: 18, background: "var(--b2)" }} />
-          <a href="/screener" style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid rgba(0,204,136,.25)", background: "var(--gd)", color: "var(--g)", fontSize: 11, fontWeight: 700, textDecoration: "none", fontFamily: "var(--f)" }}>Screener</a>
-          <button onClick={() => setApply(true)} style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid rgba(0,204,136,.25)", background: "var(--gd)", color: "var(--g)", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "var(--f)" }}>+ Submit Product</button>
+          <a href="/screener" style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,.1)", background: "rgba(255,255,255,.03)", color: "var(--t2)", fontSize: 11, fontWeight: 700, textDecoration: "none", fontFamily: "var(--f)" }}>Screener</a>
+          <button onClick={() => setApply(true)} style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,.1)", background: "rgba(255,255,255,.03)", color: "var(--t2)", fontSize: 11, fontWeight: 700, cursor: "pointer", fontFamily: "var(--f)" }}>+ Submit Product</button>
           <div style={{ width: 1, height: 18, background: "var(--b2)" }} />
           {user ? (
             <UserMenu />
@@ -497,7 +493,7 @@ export default function AgentScreener() {
           <div style={{ marginBottom: 20 }}>
             <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
               <span className="label-xs">Newly Added</span>
-              <span style={{ fontSize: 9, padding: "2px 8px", borderRadius: 10, background: "rgba(0,204,136,.06)", color: "var(--g)", fontWeight: 700, border: "1px solid rgba(0,204,136,.15)" }}>{newlyAdded.length} new</span>
+              <span style={{ fontSize: 9, padding: "2px 8px", borderRadius: 10, background: "rgba(45,212,191,.04)", color: "var(--g)", fontWeight: 700, border: "1px solid rgba(255,255,255,.08)" }}>{newlyAdded.length} new</span>
             </div>
             <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
               {newlyAdded.map((p, i) => (
