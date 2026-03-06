@@ -213,6 +213,14 @@ export default function AgentScreener() {
     return () => clearInterval(interval);
   }, []);
 
+  // Self-healing: trigger scanner from dashboard to keep data fresh
+  useEffect(() => {
+    const triggerScan = () => fetch("/api/scanner?trigger=1").catch(() => {});
+    triggerScan();
+    const i = setInterval(triggerScan, 60_000);
+    return () => clearInterval(i);
+  }, []);
+
   // Supabase Realtime subscription for instant updates
   useEffect(() => {
     if (!supabase) return;

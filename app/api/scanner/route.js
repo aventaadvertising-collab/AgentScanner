@@ -54,12 +54,23 @@ async function updateState(supabase, source, updates) {
   );
 }
 
-// ── Product filter: validate + boost confidence ──
+// ── Product filter: validate + boost confidence + recency check ──
 function filterProducts(discoveries) {
   const products = [];
   let rejected = 0;
+  let tooOld = 0;
+  const MAX_SOURCE_AGE_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
 
   for (const d of discoveries) {
+    // Recency check: skip items created more than 14 days ago at source
+    if (d.source_created_at) {
+      const age = Date.now() - new Date(d.source_created_at).getTime();
+      if (age > MAX_SOURCE_AGE_MS) {
+        tooOld++;
+        continue;
+      }
+    }
+
     const { isProduct, reason, confidenceBoost } = validateProduct(d);
     if (!isProduct) {
       rejected++;
@@ -72,8 +83,8 @@ function filterProducts(discoveries) {
     products.push(d);
   }
 
-  if (rejected > 0) {
-    console.log(`[Scanner] Product filter: ${products.length} products, ${rejected} content items rejected`);
+  if (rejected > 0 || tooOld > 0) {
+    console.log(`[Scanner] Product filter: ${products.length} products, ${rejected} non-products rejected, ${tooOld} too old`);
   }
 
   return products;
@@ -306,6 +317,12 @@ export async function GET(request) {
   const limit = Math.min(parseInt(searchParams.get("limit") || "100"), 300);
   const offset = parseInt(searchParams.get("offset") || "0");
   const category = searchParams.get("category");
+  const fresh = searchParams.get("fresh");
+
+  // Default: show items from last 48h for freshness. Fall back to wider window if sparse.
+  const now = new Date();
+  const twoDaysAgo = new Date(now - 48 * 60 * 60 * 1000).toISOString();
+  const weekAgo = new Date(now - 7 * 24 * 60 * 60 * 1000).toISOString();
 
   let query = supabase
     .from("scanner_discoveries")
@@ -313,13 +330,33 @@ export async function GET(request) {
     .order("discovered_at", { ascending: false })
     .range(offset, offset + limit - 1);
 
+  // Apply freshness filter — prioritize recent items
+  if (fresh) {
+    query = query.gte("discovered_at", twoDaysAgo);
+  }
+
   if (source) query = query.eq("source", source);
   if (category) query = query.eq("category", category);
 
-  const { data } = await query;
+  let { data } = await query;
 
-  // Stats
-  const now = new Date();
+  // If fresh filter returned too few results, widen to 7 days
+  if (fresh && (!data || data.length < 20)) {
+    let widerQuery = supabase
+      .from("scanner_discoveries")
+      .select("*")
+      .gte("discovered_at", weekAgo)
+      .order("discovered_at", { ascending: false })
+      .range(offset, offset + limit - 1);
+    if (source) widerQuery = widerQuery.eq("source", source);
+    if (category) widerQuery = widerQuery.eq("category", category);
+    const wider = await widerQuery;
+    if (wider.data && wider.data.length > (data?.length || 0)) {
+      data = wider.data;
+    }
+  }
+
+  // Stats (reuse `now` from above)
   const dayAgo = new Date(now - 24 * 60 * 60 * 1000).toISOString();
   const hourAgo = new Date(now - 60 * 60 * 1000).toISOString();
 

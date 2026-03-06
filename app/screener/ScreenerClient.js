@@ -37,7 +37,7 @@ function sourceLabel(url) {
 }
 
 function confidenceGrade(c) {
-  if (c >= 90) return { label: "S", color: "#00FFAA", bg: "rgba(0,255,170,.1)", border: "rgba(0,255,170,.2)" };
+  if (c >= 90) return { label: "S", color: "#2DD4BF", bg: "rgba(45,212,191,.1)", border: "rgba(45,212,191,.2)" };
   if (c >= 75) return { label: "A", color: "#A78BFA", bg: "rgba(167,139,250,.1)", border: "rgba(167,139,250,.2)" };
   if (c >= 60) return { label: "B", color: "#38BDF8", bg: "rgba(56,189,248,.1)", border: "rgba(56,189,248,.2)" };
   if (c >= 40) return { label: "C", color: "#FBBF24", bg: "rgba(251,191,36,.1)", border: "rgba(251,191,36,.2)" };
@@ -77,14 +77,15 @@ export default function ScreenerClient() {
   const [selectedItem, setSelectedItem] = useState(null);
   const [newCount, setNewCount] = useState(0);
 
-  // ── Upvote state ──
+  // ── Upvote + Saved state ──
   const [voterId, setVoterId] = useState(null);
   const [userVotes, setUserVotes] = useState(new Set());
+  const [showSaved, setShowSaved] = useState(false);
 
   const supabase = useMemo(() => getSupabase(), []);
 
   const fetchFeed = useCallback(() => {
-    return fetch("/api/scanner?limit=300")
+    return fetch("/api/scanner?limit=300&fresh=1")
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => {
         if (d?.discoveries) {
@@ -213,10 +214,11 @@ export default function ScreenerClient() {
 
   const filtered = useMemo(() => {
     let items = discoveries;
+    if (showSaved) items = items.filter((d) => userVotes.has(d.id));
     if (catFilter !== "All") items = items.filter((d) => d.category === catFilter);
     if (q) { const lq = q.toLowerCase(); items = items.filter((d) => d.name?.toLowerCase().includes(lq) || d.description?.toLowerCase().includes(lq) || d.category?.toLowerCase().includes(lq) || d.author?.toLowerCase().includes(lq)); }
     return items;
-  }, [discoveries, catFilter, q]);
+  }, [discoveries, catFilter, q, showSaved, userVotes]);
 
   const sourceCount = useMemo(() => {
     const s = new Set();
@@ -225,7 +227,7 @@ export default function ScreenerClient() {
   }, [discoveries]);
 
   return (
-    <div style={{ "--bg": "#0A0B10", "--s1": "#12141C", "--s2": "#1A1D28", "--b1": "rgba(0,255,170,.06)", "--b2": "rgba(0,255,170,.12)", "--b3": "rgba(0,255,170,.18)", "--t1": "#F2F2F7", "--t2": "rgba(242,242,247,.65)", "--t3": "rgba(242,242,247,.38)", "--g": "#00FFAA", "--gg": "rgba(0,255,170,.2)", "--gd": "rgba(0,255,170,.08)", "--em": "#00FFAA", "--m": "'SF Mono', 'JetBrains Mono', 'Fira Code', monospace", "--f": "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif", minHeight: "100vh", background: "var(--bg)", color: "var(--t1)", fontFamily: "var(--f)" }}>
+    <div style={{ "--bg": "#0A0B10", "--s1": "#12141C", "--s2": "#1A1D28", "--b1": "rgba(45,212,191,.06)", "--b2": "rgba(45,212,191,.12)", "--b3": "rgba(45,212,191,.18)", "--t1": "#F2F2F7", "--t2": "rgba(242,242,247,.65)", "--t3": "rgba(242,242,247,.38)", "--g": "#2DD4BF", "--gg": "rgba(45,212,191,.2)", "--gd": "rgba(45,212,191,.08)", "--em": "#2DD4BF", "--m": "'SF Mono', 'JetBrains Mono', 'Fira Code', monospace", "--f": "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif", minHeight: "100vh", background: "var(--bg)", color: "var(--t1)", fontFamily: "var(--f)" }}>
 
       <style suppressHydrationWarning>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
@@ -233,23 +235,23 @@ export default function ScreenerClient() {
         @keyframes fi-scale { from { opacity: 0; transform: scale(.96) } to { opacity: 1; transform: scale(1) } }
         @keyframes lp { 0%,100% { opacity: .35 } 50% { opacity: 1 } }
         @keyframes sl { 0% { transform: translateX(-100%) } 100% { transform: translateX(200%) } }
-        @keyframes glow-pulse { 0%,100% { box-shadow: 0 0 20px rgba(0,255,170,.1) } 50% { box-shadow: 0 0 40px rgba(0,255,170,.2) } }
+        @keyframes glow-pulse { 0%,100% { box-shadow: 0 0 20px rgba(45,212,191,.1) } 50% { box-shadow: 0 0 40px rgba(45,212,191,.2) } }
         @keyframes scan-line { 0% { transform: translateX(-100%) } 100% { transform: translateX(200%) } }
         @keyframes spin { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
         @keyframes float { 0%,100% { transform: translateY(0) } 50% { transform: translateY(-6px) } }
         @keyframes ring-rotate { from { transform: rotate(0deg) } to { transform: rotate(360deg) } }
         @keyframes fade-in { from { opacity: 0 } to { opacity: 1 } }
         @keyframes slide-in-right { from { transform: translateX(100%) } to { transform: translateX(0) } }
-        @keyframes new-glow { 0%,100% { box-shadow: inset 3px 0 12px -4px rgba(0,255,170,.08) } 50% { box-shadow: inset 3px 0 12px -4px rgba(0,255,170,.25) } }
+        @keyframes new-glow { 0%,100% { box-shadow: inset 3px 0 12px -4px rgba(45,212,191,.08) } 50% { box-shadow: inset 3px 0 12px -4px rgba(45,212,191,.25) } }
         @keyframes vote-pop { 0% { transform: scale(1) } 50% { transform: scale(1.3) } 100% { transform: scale(1) } }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        ::selection { background: rgba(0,255,170,.25); }
+        ::selection { background: rgba(45,212,191,.25); }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.08); border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.15); }
         .card { transition: all .2s cubic-bezier(.4,0,.2,1); border: 1px solid var(--b1); border-left: 2px solid transparent; cursor: pointer; position: relative; }
-        .card:hover { border-left-color: var(--g); background: rgba(0,255,170,.015) !important; box-shadow: inset 0 1px 0 0 rgba(0,255,170,.08), 0 4px 24px rgba(0,0,0,.2); }
+        .card:hover { border-left-color: var(--g); background: rgba(45,212,191,.015) !important; box-shadow: inset 0 1px 0 0 rgba(45,212,191,.08), 0 4px 24px rgba(0,0,0,.2); }
         .card::after { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, var(--g), transparent); opacity: 0; transition: opacity .25s; pointer-events: none; }
         .card:hover::after { opacity: .5; }
         .pill { transition: all .15s; cursor: pointer; user-select: none; }
@@ -260,44 +262,40 @@ export default function ScreenerClient() {
         .ghost-btn { transition: all .15s; cursor: pointer; border: 1px solid var(--b1); background: transparent; }
         .ghost-btn:hover { background: rgba(255,255,255,.04); border-color: var(--b2); }
         .stat-card { background: var(--s1); border: 1px solid var(--b1); border-radius: 10px; padding: 14px 18px; position: relative; overflow: hidden; }
-        .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(0,255,170,.08), transparent); }
+        .stat-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(45,212,191,.08), transparent); }
         .detail-panel::-webkit-scrollbar { width: 4px; }
         .detail-panel::-webkit-scrollbar-thumb { background: rgba(255,255,255,.1); border-radius: 2px; }
         .vote-btn { transition: all .15s; cursor: pointer; border: none; background: transparent; }
-        .vote-btn:hover { background: rgba(0,255,170,.06) !important; }
+        .vote-btn:hover { background: rgba(45,212,191,.06) !important; }
         .vote-btn:active .vote-arrow { animation: vote-pop .2s ease; }
       `}</style>
 
       {/* ─── Ambient Background ─── */}
       <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
-        <div style={{ position: "absolute", top: "-20%", left: "20%", width: "40vw", height: "40vw", borderRadius: "50%", background: "radial-gradient(circle, rgba(0,255,170,.04) 0%, transparent 70%)", filter: "blur(60px)" }} />
+        <div style={{ position: "absolute", top: "-20%", left: "20%", width: "40vw", height: "40vw", borderRadius: "50%", background: "radial-gradient(circle, rgba(45,212,191,.04) 0%, transparent 70%)", filter: "blur(60px)" }} />
         <div style={{ position: "absolute", top: "30%", right: "10%", width: "30vw", height: "30vw", borderRadius: "50%", background: "radial-gradient(circle, rgba(167,139,250,.03) 0%, transparent 70%)", filter: "blur(60px)" }} />
-        <div style={{ position: "absolute", bottom: "10%", left: "40%", width: "35vw", height: "35vw", borderRadius: "50%", background: "radial-gradient(circle, rgba(0,255,170,.02) 0%, transparent 70%)", filter: "blur(60px)" }} />
-        <div style={{ position: "absolute", inset: 0, opacity: 0.03, backgroundImage: "radial-gradient(circle, rgba(0,255,170,.5) 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
+        <div style={{ position: "absolute", bottom: "10%", left: "40%", width: "35vw", height: "35vw", borderRadius: "50%", background: "radial-gradient(circle, rgba(45,212,191,.02) 0%, transparent 70%)", filter: "blur(60px)" }} />
+        <div style={{ position: "absolute", inset: 0, opacity: 0.03, backgroundImage: "radial-gradient(circle, rgba(45,212,191,.5) 1px, transparent 1px)", backgroundSize: "24px 24px" }} />
       </div>
 
       {/* ─── HEADER ─── */}
       <header style={{ padding: "0 32px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--b1)", background: "rgba(10,11,16,.88)", backdropFilter: "blur(24px) saturate(180%)", position: "sticky", top: 0, zIndex: 100 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <a href="/dashboard" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none", color: "var(--t1)" }}>
-            <div style={{ width: 30, height: 30, borderRadius: 8, position: "relative", overflow: "hidden", background: "linear-gradient(135deg, #00FFAA, #00CC88, #00AA77)", display: "flex", alignItems: "center", justifyContent: "center", animation: "glow-pulse 4s ease-in-out infinite" }}>
-              <span style={{ fontSize: 11, fontWeight: 800, color: "#0A0B10", fontFamily: "var(--m)", letterSpacing: ".02em" }}>AS</span>
-              <div style={{ position: "absolute", inset: 0, background: "linear-gradient(90deg, transparent, rgba(255,255,255,.25), transparent)", animation: "sl 4s ease-in-out infinite" }} />
-            </div>
             <span style={{ fontSize: 15, fontWeight: 800, fontFamily: "var(--m)", letterSpacing: "-.02em" }}>
-              AGENT<span style={{ color: "var(--g)" }}>SCREENER</span>
+              agent<span style={{ color: "var(--g)" }}>screener</span>
             </span>
           </a>
           <div style={{ height: 20, width: 1, background: "var(--b2)" }} />
-          <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: "var(--g)", letterSpacing: ".06em", padding: "3px 10px", borderRadius: 4, background: "var(--gd)", border: "1px solid rgba(0,255,170,.15)" }}>SCREENER</span>
+          <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: "var(--g)", letterSpacing: ".06em", padding: "3px 10px", borderRadius: 4, background: "var(--gd)", border: "1px solid rgba(45,212,191,.15)" }}>SCREENER</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           {/* Scanning indicator */}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 14px", borderRadius: 4, background: "rgba(0,255,170,.04)", border: "1px solid rgba(0,255,170,.1)" }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#00FFAA", animation: "lp 1.5s ease-in-out infinite", boxShadow: "0 0 8px rgba(0,255,170,.5)" }} />
-            <span style={{ fontSize: 10, fontWeight: 700, color: "#00FFAA", fontFamily: "var(--m)", letterSpacing: ".04em" }}>SCANNING</span>
-            <div style={{ width: 40, height: 3, borderRadius: 1, background: "rgba(0,255,170,.1)", overflow: "hidden" }}>
-              <div style={{ width: "30%", height: "100%", background: "linear-gradient(90deg, transparent, #00FFAA, transparent)", animation: "scan-line 2s ease-in-out infinite" }} />
+          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 14px", borderRadius: 4, background: "rgba(45,212,191,.04)", border: "1px solid rgba(45,212,191,.1)" }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2DD4BF", animation: "lp 1.5s ease-in-out infinite", boxShadow: "0 0 8px rgba(45,212,191,.5)" }} />
+            <span style={{ fontSize: 10, fontWeight: 700, color: "#2DD4BF", fontFamily: "var(--m)", letterSpacing: ".04em" }}>SCANNING</span>
+            <div style={{ width: 40, height: 3, borderRadius: 1, background: "rgba(45,212,191,.1)", overflow: "hidden" }}>
+              <div style={{ width: "30%", height: "100%", background: "linear-gradient(90deg, transparent, #2DD4BF, transparent)", animation: "scan-line 2s ease-in-out infinite" }} />
             </div>
           </div>
           <button className="ghost-btn" onClick={handleRefresh} disabled={refreshing} style={{ padding: "6px 14px", borderRadius: 6, color: "var(--t2)", fontSize: 12, fontWeight: 600, fontFamily: "var(--m)", display: "flex", alignItems: "center", gap: 6, opacity: refreshing ? 0.5 : 1 }}>
@@ -312,7 +310,7 @@ export default function ScreenerClient() {
       <div style={{ padding: "20px 32px", position: "relative", zIndex: 1 }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12 }}>
           {[
-            { label: "Detected Today", value: stats.today, icon: "◈", color: "#00FFAA" },
+            { label: "Detected Today", value: stats.today, icon: "◈", color: "#2DD4BF" },
             { label: "This Hour", value: stats.this_hour, icon: "⏱", color: "#A78BFA" },
             { label: "In Feed", value: filtered.length, icon: "◉", color: "#38BDF8" },
             { label: "Sources Active", value: sourceCount || 11, icon: "⊛", color: "#FBBF24" },
@@ -336,7 +334,11 @@ export default function ScreenerClient() {
       {/* ─── TOOLBAR ─── */}
       <div style={{ padding: "0 32px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, position: "relative", zIndex: 1 }}>
         <div style={{ display: "flex", gap: 6, alignItems: "center", overflowX: "auto", maxWidth: "65%", paddingBottom: 2 }}>
-          <button className={`pill${catFilter === "All" ? " on" : ""}`} onClick={() => setCatFilter("All")} style={{ padding: "6px 14px", borderRadius: 4, border: "1px solid var(--b1)", fontSize: 12, fontWeight: 600, fontFamily: "var(--m)", color: "var(--t2)", whiteSpace: "nowrap", background: "transparent" }}>All</button>
+          <button className={`pill${showSaved ? " on" : ""}`} onClick={() => { setShowSaved(!showSaved); if (!showSaved) setCatFilter("All"); }} style={{ padding: "6px 14px", borderRadius: 4, border: showSaved ? "1px solid rgba(45,212,191,.25)" : "1px solid var(--b1)", background: showSaved ? "rgba(45,212,191,.08)" : "transparent", fontSize: 12, fontWeight: 700, fontFamily: "var(--m)", color: showSaved ? "var(--g)" : "var(--t2)", whiteSpace: "nowrap" }}>
+            ★ Saved
+            {userVotes.size > 0 && <span style={{ marginLeft: 5, fontSize: 10, opacity: 0.5, fontFamily: "var(--m)" }}>{userVotes.size}</span>}
+          </button>
+          <button className={`pill${catFilter === "All" && !showSaved ? " on" : ""}`} onClick={() => { setCatFilter("All"); setShowSaved(false); }} style={{ padding: "6px 14px", borderRadius: 4, border: "1px solid var(--b1)", fontSize: 12, fontWeight: 600, fontFamily: "var(--m)", color: "var(--t2)", whiteSpace: "nowrap", background: "transparent" }}>All</button>
           {topCats.map((cat) => (
             <button key={cat} className={`pill${catFilter === cat ? " on" : ""}`} onClick={() => setCatFilter(catFilter === cat ? "All" : cat)} style={{ padding: "6px 14px", borderRadius: 4, border: "1px solid var(--b1)", fontSize: 12, fontWeight: 600, fontFamily: "var(--m)", color: "var(--t2)", whiteSpace: "nowrap", background: "transparent" }}>
               {cat}
@@ -351,7 +353,7 @@ export default function ScreenerClient() {
           </div>
           <div style={{ display: "flex", borderRadius: 4, border: "1px solid var(--b1)", overflow: "hidden" }}>
             {["feed", "grid"].map((v) => (
-              <button key={v} onClick={() => setView(v)} style={{ padding: "6px 10px", border: "none", background: view === v ? "rgba(0,255,170,.06)" : "transparent", color: view === v ? "var(--g)" : "var(--t3)", fontSize: 12, cursor: "pointer", transition: "all .12s", fontFamily: "var(--m)" }}>{v === "feed" ? "☰" : "⊞"}</button>
+              <button key={v} onClick={() => setView(v)} style={{ padding: "6px 10px", border: "none", background: view === v ? "rgba(45,212,191,.06)" : "transparent", color: view === v ? "var(--g)" : "var(--t3)", fontSize: 12, cursor: "pointer", transition: "all .12s", fontFamily: "var(--m)" }}>{v === "feed" ? "☰" : "⊞"}</button>
             ))}
           </div>
         </div>
@@ -359,14 +361,14 @@ export default function ScreenerClient() {
 
       {/* ─── NEW PRODUCTS BANNER ─── */}
       {newCount > 0 && (
-        <div style={{ position: "sticky", top: 56, zIndex: 50, margin: "0 32px 12px", padding: "10px 20px", borderRadius: 6, background: "rgba(0,255,170,.04)", border: "1px solid rgba(0,255,170,.12)", display: "flex", alignItems: "center", justifyContent: "space-between", backdropFilter: "blur(12px)", animation: "fi .3s ease" }}>
+        <div style={{ position: "sticky", top: 56, zIndex: 50, margin: "0 32px 12px", padding: "10px 20px", borderRadius: 6, background: "rgba(45,212,191,.04)", border: "1px solid rgba(45,212,191,.12)", display: "flex", alignItems: "center", justifyContent: "space-between", backdropFilter: "blur(12px)", animation: "fi .3s ease" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#00FFAA", animation: "lp 1.5s ease-in-out infinite" }} />
-            <span style={{ fontSize: 12, fontWeight: 700, color: "#00FFAA", fontFamily: "var(--m)" }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#2DD4BF", animation: "lp 1.5s ease-in-out infinite" }} />
+            <span style={{ fontSize: 12, fontWeight: 700, color: "#2DD4BF", fontFamily: "var(--m)" }}>
               {newCount} new product{newCount > 1 ? "s" : ""} discovered
             </span>
           </div>
-          <button onClick={() => { setNewCount(0); window.scrollTo({ top: 0, behavior: "smooth" }); }} style={{ padding: "5px 14px", borderRadius: 4, border: "1px solid rgba(0,255,170,.2)", background: "rgba(0,255,170,.08)", color: "#00FFAA", fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", cursor: "pointer", letterSpacing: ".04em" }}>
+          <button onClick={() => { setNewCount(0); window.scrollTo({ top: 0, behavior: "smooth" }); }} style={{ padding: "5px 14px", borderRadius: 4, border: "1px solid rgba(45,212,191,.2)", background: "rgba(45,212,191,.08)", color: "#2DD4BF", fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", cursor: "pointer", letterSpacing: ".04em" }}>
             SHOW ↑
           </button>
         </div>
@@ -374,7 +376,13 @@ export default function ScreenerClient() {
 
       {/* ─── FEED / GRID ─── */}
       <div style={{ padding: "0 32px 60px", position: "relative", zIndex: 1 }}>
-        {filtered.length === 0 ? (
+        {filtered.length === 0 && showSaved ? (
+          <div style={{ padding: "80px 0", textAlign: "center", animation: "fi .5s ease both" }}>
+            <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.3 }}>★</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: "var(--t1)", marginBottom: 8, fontFamily: "var(--m)" }}>No saved products yet</div>
+            <div style={{ fontSize: 13, color: "var(--t2)", maxWidth: 380, margin: "0 auto" }}>Upvote products to save them here. Your saved items persist across sessions.</div>
+          </div>
+        ) : filtered.length === 0 ? (
           <EmptyState />
         ) : view === "feed" ? (
           <div style={{ maxWidth: 900, margin: "0 auto" }}>
@@ -413,21 +421,21 @@ function UpvoteButton({ item, voted, onVote, size = "sm" }) {
       style={{
         display: "flex", flexDirection: "column", alignItems: "center", gap: 1,
         padding: isLg ? "8px 14px" : "4px 8px", borderRadius: 4,
-        border: `1px solid ${voted ? "rgba(0,255,170,.25)" : "rgba(255,255,255,.06)"}`,
-        background: voted ? "rgba(0,255,170,.08)" : "transparent",
+        border: `1px solid ${voted ? "rgba(45,212,191,.25)" : "rgba(255,255,255,.06)"}`,
+        background: voted ? "rgba(45,212,191,.08)" : "transparent",
         minWidth: isLg ? 48 : 36,
       }}
     >
       <span className="vote-arrow" style={{
         fontSize: isLg ? 16 : 12, lineHeight: 1,
-        color: voted ? "#00FFAA" : "var(--t3)",
+        color: voted ? "#2DD4BF" : "var(--t3)",
         transition: "color .15s",
       }}>
         {voted ? "▲" : "△"}
       </span>
       <span style={{
         fontSize: isLg ? 12 : 10, fontWeight: 700, fontFamily: "var(--m)",
-        color: voted ? "#00FFAA" : "var(--t3)",
+        color: voted ? "#2DD4BF" : "var(--t3)",
         transition: "color .15s",
       }}>
         {item.upvotes || 0}
@@ -449,7 +457,7 @@ function FeedCard({ item, index, onSelect, voted, onVote }) {
     <div className="card" onClick={() => onSelect?.(item)} style={{
       padding: "16px 20px", borderRadius: 6, background: "var(--s1)", marginBottom: 8,
       animation: `fi .35s ease ${Math.min(index * 0.04, 0.6)}s both`,
-      borderLeftColor: isVeryNew ? "#00FFAA" : undefined,
+      borderLeftColor: isVeryNew ? "#2DD4BF" : undefined,
       ...(isVeryNew ? { animation: `fi .35s ease ${Math.min(index * 0.04, 0.6)}s both, new-glow 2s ease-in-out infinite` } : {}),
     }}>
       <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
@@ -467,7 +475,7 @@ function FeedCard({ item, index, onSelect, voted, onVote }) {
           {/* Title row */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2, flexWrap: "wrap" }}>
             <span style={{ fontSize: 15, fontWeight: 700, color: "var(--t1)", letterSpacing: "-.01em" }}>{formatName(item.name)}</span>
-            {isNew && <span style={{ fontSize: 8, fontWeight: 800, fontFamily: "var(--m)", color: "#00FFAA", letterSpacing: ".06em" }}>NEW</span>}
+            {isNew && <span style={{ fontSize: 8, fontWeight: 800, fontFamily: "var(--m)", color: "#2DD4BF", letterSpacing: ".06em" }}>NEW</span>}
           </div>
 
           {/* Subtitle */}
@@ -489,7 +497,7 @@ function FeedCard({ item, index, onSelect, voted, onVote }) {
           {/* Metadata row */}
           <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
             {item.category && (
-              <span style={{ padding: "3px 10px", borderRadius: 4, background: "var(--gd)", border: "1px solid rgba(0,255,170,.12)", fontSize: 11, fontWeight: 600, color: "var(--g)", fontFamily: "var(--m)" }}>{item.category}</span>
+              <span style={{ padding: "3px 10px", borderRadius: 4, background: "var(--gd)", border: "1px solid rgba(45,212,191,.12)", fontSize: 11, fontWeight: 600, color: "var(--g)", fontFamily: "var(--m)" }}>{item.category}</span>
             )}
             {item.language && (
               <span style={{ padding: "3px 10px", borderRadius: 4, background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.06)", fontSize: 11, fontWeight: 600, color: "var(--t2)", fontFamily: "var(--m)" }}>{item.language}</span>
@@ -504,7 +512,7 @@ function FeedCard({ item, index, onSelect, voted, onVote }) {
         {/* Right column: upvote + time */}
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
           <UpvoteButton item={item} voted={voted} onVote={onVote} />
-          <div style={{ fontSize: 11, fontWeight: 600, color: isNew ? "#00FFAA" : "var(--t3)", fontFamily: "var(--m)" }}>{age}</div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: isNew ? "#2DD4BF" : "var(--t3)", fontFamily: "var(--m)" }}>{age}</div>
         </div>
       </div>
     </div>
@@ -522,7 +530,7 @@ function GridCard({ item, index, onSelect, voted, onVote }) {
     <div className="card" onClick={() => onSelect?.(item)} style={{
       padding: "18px 20px", borderRadius: 8, background: "var(--s1)",
       animation: `fi-scale .3s ease ${Math.min(index * 0.04, 0.5)}s both`,
-      borderLeftColor: isVeryNew ? "#00FFAA" : undefined,
+      borderLeftColor: isVeryNew ? "#2DD4BF" : undefined,
     }}>
       {/* Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
@@ -533,7 +541,7 @@ function GridCard({ item, index, onSelect, voted, onVote }) {
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
               <span style={{ fontSize: 14, fontWeight: 700, color: "var(--t1)", letterSpacing: "-.01em" }}>{formatName(item.name)}</span>
-              {isNew && <span style={{ fontSize: 8, fontWeight: 800, fontFamily: "var(--m)", color: "#00FFAA", letterSpacing: ".06em" }}>NEW</span>}
+              {isNew && <span style={{ fontSize: 8, fontWeight: 800, fontFamily: "var(--m)", color: "#2DD4BF", letterSpacing: ".06em" }}>NEW</span>}
             </div>
             <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 1, fontFamily: "var(--m)" }}>{formatSubtitle(item)}</div>
           </div>
@@ -568,7 +576,7 @@ function GridCard({ item, index, onSelect, voted, onVote }) {
       {/* Footer */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          {item.category && <span style={{ padding: "3px 10px", borderRadius: 4, background: "var(--gd)", border: "1px solid rgba(0,255,170,.12)", fontSize: 10, fontWeight: 600, color: "var(--g)", fontFamily: "var(--m)" }}>{item.category}</span>}
+          {item.category && <span style={{ padding: "3px 10px", borderRadius: 4, background: "var(--gd)", border: "1px solid rgba(45,212,191,.12)", fontSize: 10, fontWeight: 600, color: "var(--g)", fontFamily: "var(--m)" }}>{item.category}</span>}
           <UpvoteButton item={item} voted={voted} onVote={onVote} />
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -603,10 +611,10 @@ function DetailPanel({ item, onClose, voted, onVote }) {
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.5)", backdropFilter: "blur(4px)", zIndex: 200, animation: "fade-in .2s ease" }} />
 
       {/* Panel */}
-      <div className="detail-panel" style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 460, maxWidth: "90vw", background: "#12141C", borderLeft: "1px solid rgba(0,255,170,.08)", zIndex: 201, overflowY: "auto", animation: "slide-in-right .25s cubic-bezier(.4,0,.2,1)", boxShadow: "-20px 0 60px rgba(0,0,0,.4)" }}>
+      <div className="detail-panel" style={{ position: "fixed", top: 0, right: 0, bottom: 0, width: 460, maxWidth: "90vw", background: "#12141C", borderLeft: "1px solid rgba(45,212,191,.08)", zIndex: 201, overflowY: "auto", animation: "slide-in-right .25s cubic-bezier(.4,0,.2,1)", boxShadow: "-20px 0 60px rgba(0,0,0,.4)" }}>
 
         {/* Header */}
-        <div style={{ padding: "20px 24px", borderBottom: "1px solid rgba(0,255,170,.06)", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div style={{ padding: "20px 24px", borderBottom: "1px solid rgba(45,212,191,.06)", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div style={{ flex: 1, minWidth: 0 }}>
             <h2 style={{ fontSize: 20, fontWeight: 800, color: "#F2F2F7", margin: 0, letterSpacing: "-.02em", lineHeight: 1.3 }}>
               {formatName(item.name)}
@@ -626,9 +634,9 @@ function DetailPanel({ item, onClose, voted, onVote }) {
         </div>
 
         {/* Badges + Confidence */}
-        <div style={{ padding: "16px 24px", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", borderBottom: "1px solid rgba(0,255,170,.06)" }}>
+        <div style={{ padding: "16px 24px", display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center", borderBottom: "1px solid rgba(45,212,191,.06)" }}>
           {sl && <span style={{ padding: "4px 12px", borderRadius: 4, background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.08)", fontSize: 11, fontWeight: 600, color: "rgba(242,242,247,.65)", fontFamily: "var(--m)" }}>{sl}</span>}
-          {item.category && <span style={{ padding: "4px 12px", borderRadius: 4, background: "rgba(0,255,170,.08)", border: "1px solid rgba(0,255,170,.12)", fontSize: 11, fontWeight: 600, color: "#00FFAA", fontFamily: "var(--m)" }}>{item.category}</span>}
+          {item.category && <span style={{ padding: "4px 12px", borderRadius: 4, background: "rgba(45,212,191,.08)", border: "1px solid rgba(45,212,191,.12)", fontSize: 11, fontWeight: 600, color: "#2DD4BF", fontFamily: "var(--m)" }}>{item.category}</span>}
           <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
               <span style={{ fontSize: 18, fontWeight: 800, fontFamily: "var(--m)", color: grade.color }}>{grade.label}</span>
@@ -645,8 +653,8 @@ function DetailPanel({ item, onClose, voted, onVote }) {
 
         {/* Author */}
         {item.author && (
-          <div style={{ padding: "14px 24px", borderBottom: "1px solid rgba(0,255,170,.06)", display: "flex", alignItems: "center", gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: 6, background: "rgba(0,255,170,.06)", border: "1px solid rgba(0,255,170,.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#00FFAA", fontFamily: "var(--m)" }}>
+          <div style={{ padding: "14px 24px", borderBottom: "1px solid rgba(45,212,191,.06)", display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ width: 28, height: 28, borderRadius: 6, background: "rgba(45,212,191,.06)", border: "1px solid rgba(45,212,191,.1)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: "#2DD4BF", fontFamily: "var(--m)" }}>
               {item.author[0]?.toUpperCase()}
             </div>
             <div style={{ flex: 1 }}>
@@ -662,7 +670,7 @@ function DetailPanel({ item, onClose, voted, onVote }) {
         )}
 
         {/* Description */}
-        <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(0,255,170,.06)" }}>
+        <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(45,212,191,.06)" }}>
           <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "rgba(242,242,247,.38)", marginBottom: 8, fontFamily: "var(--m)" }}>Description</div>
           <div style={{ fontSize: 13, color: "rgba(242,242,247,.65)", lineHeight: 1.65 }}>
             {item.description || "No description available."}
@@ -671,7 +679,7 @@ function DetailPanel({ item, onClose, voted, onVote }) {
 
         {/* Metrics grid */}
         {metrics.length > 0 && (
-          <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(0,255,170,.06)" }}>
+          <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(45,212,191,.06)" }}>
             <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "rgba(242,242,247,.38)", marginBottom: 10, fontFamily: "var(--m)" }}>Metrics</div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
               {metrics.map((m, i) => (
@@ -686,7 +694,7 @@ function DetailPanel({ item, onClose, voted, onVote }) {
 
         {/* Topics */}
         {item.topics?.length > 0 && (
-          <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(0,255,170,.06)" }}>
+          <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(45,212,191,.06)" }}>
             <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "rgba(242,242,247,.38)", marginBottom: 8, fontFamily: "var(--m)" }}>Topics</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {item.topics.map((t, i) => (
@@ -698,18 +706,18 @@ function DetailPanel({ item, onClose, voted, onVote }) {
 
         {/* AI Keywords */}
         {item.ai_keywords?.length > 0 && (
-          <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(0,255,170,.06)" }}>
+          <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(45,212,191,.06)" }}>
             <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "rgba(242,242,247,.38)", marginBottom: 8, fontFamily: "var(--m)" }}>AI Classification</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {item.ai_keywords.map((kw, i) => (
-                <span key={i} style={{ padding: "4px 10px", borderRadius: 4, background: "rgba(0,255,170,.06)", border: "1px solid rgba(0,255,170,.1)", fontSize: 11, fontWeight: 600, color: "#00FFAA", fontFamily: "var(--m)" }}>{kw}</span>
+                <span key={i} style={{ padding: "4px 10px", borderRadius: 4, background: "rgba(45,212,191,.06)", border: "1px solid rgba(45,212,191,.1)", fontSize: 11, fontWeight: 600, color: "#2DD4BF", fontFamily: "var(--m)" }}>{kw}</span>
               ))}
             </div>
           </div>
         )}
 
         {/* Timestamps */}
-        <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(0,255,170,.06)", display: "flex", gap: 24 }}>
+        <div style={{ padding: "16px 24px", borderBottom: "1px solid rgba(45,212,191,.06)", display: "flex", gap: 24 }}>
           <div>
             <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "rgba(242,242,247,.38)", marginBottom: 3, fontFamily: "var(--m)" }}>Discovered</div>
             <div style={{ fontSize: 12, fontWeight: 600, color: "#F2F2F7", fontFamily: "var(--m)" }}>{item.discovered_at ? timeAgo(item.discovered_at) : "—"}</div>
@@ -727,7 +735,7 @@ function DetailPanel({ item, onClose, voted, onVote }) {
         {/* Action buttons */}
         <div style={{ padding: "20px 24px", display: "flex", gap: 10, alignItems: "center" }}>
           <UpvoteButton item={item} voted={voted} onVote={onVote} size="lg" />
-          <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: "12px 0", borderRadius: 6, background: "#00FFAA", color: "#0A0B10", fontSize: 13, fontWeight: 800, textDecoration: "none", textAlign: "center", display: "block", transition: "opacity .15s", fontFamily: "var(--m)", letterSpacing: ".02em" }}>
+          <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: "12px 0", borderRadius: 6, background: "#2DD4BF", color: "#0A0B10", fontSize: 13, fontWeight: 800, textDecoration: "none", textAlign: "center", display: "block", transition: "opacity .15s", fontFamily: "var(--m)", letterSpacing: ".02em" }}>
             Open Product →
           </a>
           {item.author_url && (
@@ -746,11 +754,11 @@ function EmptyState() {
   return (
     <div style={{ padding: "100px 0", textAlign: "center", animation: "fi .5s ease both" }}>
       <div style={{ position: "relative", display: "inline-block", marginBottom: 32, width: 100, height: 100 }}>
-        <div style={{ position: "absolute", inset: 10, borderRadius: "50%", background: "linear-gradient(135deg, rgba(0,255,170,.1), rgba(167,139,250,.05))", display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ position: "absolute", inset: 10, borderRadius: "50%", background: "linear-gradient(135deg, rgba(45,212,191,.1), rgba(167,139,250,.05))", display: "flex", alignItems: "center", justifyContent: "center" }}>
           <span style={{ fontSize: 32, filter: "saturate(0) brightness(1.2)", animation: "float 3s ease-in-out infinite" }}>⌕</span>
         </div>
-        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: "1px solid rgba(0,255,170,.15)", animation: "ring-rotate 8s linear infinite" }}>
-          <div style={{ position: "absolute", top: -3, left: "50%", transform: "translateX(-50%)", width: 6, height: 6, borderRadius: "50%", background: "#00FFAA", boxShadow: "0 0 10px rgba(0,255,170,.5)" }} />
+        <div style={{ position: "absolute", inset: 0, borderRadius: "50%", border: "1px solid rgba(45,212,191,.15)", animation: "ring-rotate 8s linear infinite" }}>
+          <div style={{ position: "absolute", top: -3, left: "50%", transform: "translateX(-50%)", width: 6, height: 6, borderRadius: "50%", background: "#2DD4BF", boxShadow: "0 0 10px rgba(45,212,191,.5)" }} />
         </div>
         <div style={{ position: "absolute", inset: -5, borderRadius: "50%", border: "1px dashed rgba(167,139,250,.1)", animation: "ring-rotate 12s linear infinite reverse" }} />
       </div>
@@ -763,7 +771,7 @@ function EmptyState() {
       </div>
 
       <div style={{ display: "inline-flex", alignItems: "center", gap: 10, padding: "10px 20px", borderRadius: 6, background: "var(--s1)", border: "1px solid var(--b1)" }}>
-        <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#00FFAA", animation: "lp 2s ease-in-out infinite", boxShadow: "0 0 8px rgba(0,255,170,.4)" }} />
+        <span style={{ width: 7, height: 7, borderRadius: "50%", background: "#2DD4BF", animation: "lp 2s ease-in-out infinite", boxShadow: "0 0 8px rgba(45,212,191,.4)" }} />
         <span style={{ fontSize: 12, fontWeight: 600, color: "var(--t2)", fontFamily: "var(--m)" }}>Intelligence engine active — awaiting first screening cycle</span>
       </div>
     </div>
