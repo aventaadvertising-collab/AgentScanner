@@ -44,6 +44,10 @@ const SOURCE_META = {
   arxiv:             { bg: "rgba(178,34,34,.12)",  fg: "#B22222", label: "AX" },
   devto:             { bg: "rgba(59,73,223,.12)",  fg: "#3B49DF", label: "DV" },
   lobsters:          { bg: "rgba(156,0,0,.12)",    fg: "#9C0000", label: "LB" },
+  "github-releases": { bg: "rgba(45,212,191,.12)", fg: "#2DD4BF", label: "REL" },
+  stackoverflow:     { bg: "rgba(244,128,36,.12)", fg: "#F48024", label: "SO" },
+  "github-discussions": { bg: "rgba(130,80,223,.12)", fg: "#8250DF", label: "GD" },
+  mastodon:          { bg: "rgba(99,100,255,.12)", fg: "#6364FF", label: "MT" },
 };
 
 const FEED_SOURCES = [
@@ -54,6 +58,8 @@ const FEED_SOURCES = [
   { key: "reddit", label: "RD" },
   { key: "npm", label: "NPM" },
   { key: "huggingface", label: "HF" },
+  { key: "stackoverflow", label: "SO" },
+  { key: "mastodon", label: "MT" },
 ];
 
 // ── Helpers ──

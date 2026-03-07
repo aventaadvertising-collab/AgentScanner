@@ -3,10 +3,11 @@
 // GET /api/scanner?secret=...&source=batch1  → cron-triggered scan
 // GET /api/scanner                           → public feed
 //
-// 3 batch crons, each running sources IN PARALLEL:
-//   batch1: github, pypi, huggingface, hackernews (every minute)
-//   batch2: npm, reddit, producthunt, arxiv       (every minute)
+// 4 batch crons, each running sources IN PARALLEL:
+//   batch1: github, pypi, huggingface, hackernews            (every minute)
+//   batch2: npm, reddit, producthunt, arxiv                  (every minute)
 //   batch3: github-trending, github-momentum, devto, lobsters (every minute)
+//   batch4: github-releases, stackoverflow, github-discussions, mastodon (every minute)
 //
 // Also supports: source=all, source=<individual-source>
 // ============================================================
@@ -24,6 +25,10 @@ import { scanGitHubTrending } from "@/lib/scanner/github-trending";
 import { scanGitHubMomentum } from "@/lib/scanner/github-momentum";
 import { scanDevTo } from "@/lib/scanner/devto";
 import { scanLobsters } from "@/lib/scanner/lobsters";
+import { scanGitHubReleases } from "@/lib/scanner/github-releases";
+import { scanStackOverflow } from "@/lib/scanner/stackoverflow";
+import { scanGitHubDiscussions } from "@/lib/scanner/github-discussions";
+import { scanMastodon } from "@/lib/scanner/mastodon";
 import { validateProduct } from "@/lib/scanner/product-filter";
 
 // ── Batch definitions ──
@@ -31,6 +36,7 @@ const BATCHES = {
   batch1: ["github", "pypi", "huggingface", "hackernews"],
   batch2: ["npm", "reddit", "producthunt", "arxiv"],
   batch3: ["github-trending", "github-momentum", "devto", "lobsters"],
+  batch4: ["github-releases", "stackoverflow", "github-discussions", "mastodon"],
 };
 
 function getSupabaseAdmin() {
@@ -171,6 +177,30 @@ async function runSource(sourceName, stateMap, supabase) {
         stateUpdate = { last_scan_at: r.newLastScanAt };
         break;
       }
+      case "github-releases": {
+        const r = await scanGitHubReleases(state.last_scan_at, process.env.GITHUB_TOKEN);
+        discoveries = r.discoveries;
+        stateUpdate = { last_scan_at: r.newLastScanAt };
+        break;
+      }
+      case "stackoverflow": {
+        const r = await scanStackOverflow(state.last_scan_at);
+        discoveries = r.discoveries;
+        stateUpdate = { last_scan_at: r.newLastScanAt };
+        break;
+      }
+      case "github-discussions": {
+        const r = await scanGitHubDiscussions(state.last_scan_at, process.env.GITHUB_TOKEN);
+        discoveries = r.discoveries;
+        stateUpdate = { last_scan_at: r.newLastScanAt };
+        break;
+      }
+      case "mastodon": {
+        const r = await scanMastodon(state.last_scan_at);
+        discoveries = r.discoveries;
+        stateUpdate = { last_scan_at: r.newLastScanAt };
+        break;
+      }
     }
 
     // Apply product filter — reject blog posts, discussions, non-products
@@ -285,7 +315,7 @@ export async function GET(request) {
 
     // Stale — pick which batch to run (rotate based on minute)
     const minute = new Date().getMinutes();
-    const batchKey = ["batch1", "batch2", "batch3"][minute % 3];
+    const batchKey = ["batch1", "batch2", "batch3", "batch4"][minute % 4];
     const sourcesToScan = BATCHES[batchKey];
 
     const { data: states } = await supabase.from("scanner_state").select("*");
