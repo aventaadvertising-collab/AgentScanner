@@ -2,23 +2,41 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { REGISTRY } from "@/lib/pipeline/registry";
-import { CompactHeatmap } from "@/app/components/CommitHeatmap";
+import { CommitHeatmap, CompactHeatmap } from "@/app/components/CommitHeatmap";
 import { getSupabase } from "@/lib/supabase";
 
 // ============================================================
-// ACTIVITY PAGE — Development Pulse Dashboard
-// Left: Breakout feed (momentum discoveries, real-time)
-// Right: Product grid with recent daily activity bars
+// TERMINAL PULSE — Live Development Activity Monitor
+// Bloomberg-terminal-style spectrogram matrix with momentum sort
 // ============================================================
 
-// ── helpers ──
+// ── Color scale (teal, 5 levels) ──
+const LEVELS = [
+  "rgba(255,255,255,.03)",
+  "rgba(45,212,191,.15)",
+  "rgba(45,212,191,.35)",
+  "rgba(45,212,191,.55)",
+  "rgba(45,212,191,.85)",
+];
+
+function getLevel(count, max) {
+  if (!count) return 0;
+  if (max <= 0) return 1;
+  const pct = count / max;
+  if (pct > 0.75) return 4;
+  if (pct > 0.5) return 3;
+  if (pct > 0.25) return 2;
+  return 1;
+}
+
+// ── Helpers ──
 
 function timeAgo(ts) {
   const secs = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
-  if (secs < 60) return "just now";
-  if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
-  if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
-  return `${Math.floor(secs / 86400)}d ago`;
+  if (secs < 60) return "now";
+  if (secs < 3600) return `${Math.floor(secs / 60)}m`;
+  if (secs < 86400) return `${Math.floor(secs / 3600)}h`;
+  return `${Math.floor(secs / 86400)}d`;
 }
 
 function recentTotal(weeks, n = 4) {
@@ -36,115 +54,236 @@ function getTrend(weeks) {
   return { dir: change >= 0 ? "up" : "down", pct: Math.abs(change) };
 }
 
-function getLast14Days(weeks) {
-  if (!weeks || weeks.length < 2) return null;
-  const last2 = weeks.slice(-2);
+function getMomentumScore(weeks) {
+  if (!weeks || weeks.length < 8) return 0;
+  const recent = weeks.slice(-4).reduce((s, w) => s + w.t, 0);
+  const prev = weeks.slice(-8, -4).reduce((s, w) => s + w.t, 0);
+  if (prev === 0) return recent > 0 ? 999 : 0;
+  return recent / prev;
+}
+
+function getLast21Days(weeks) {
+  if (!weeks || weeks.length < 3) return null;
+  const last3 = weeks.slice(-3);
   const days = [];
-  for (const wk of last2) {
+  for (const wk of last3) {
     for (let d = 0; d < 7; d++) days.push(wk.d?.[d] || 0);
   }
-  return days.slice(-14);
+  return days.slice(-21);
+}
+
+function getDayLabel(daysAgo) {
+  const d = new Date();
+  d.setDate(d.getDate() - daysAgo);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
 // ────────────────────────────────────────────
-// Daily Activity Bars — last 14 days
+// Spectrogram Strip — 21-day thermal visualization
 // ────────────────────────────────────────────
-function DailyBars({ days, w = 260, h = 48 }) {
+function SpectrogramStrip({ days, width = 420, height = 18, showToday = true }) {
   if (!days || !days.length) return null;
   const max = Math.max(...days, 1);
-  const barW = Math.floor((w - 2) / days.length) - 1;
+  const n = days.length;
+  const cellW = Math.max(Math.floor((width - 2) / n) - 1, 2);
   const gap = 1;
 
   return (
-    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} style={{ display: "block" }}>
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: "block", borderRadius: 3 }}>
       {days.map((count, i) => {
-        const barH = Math.max((count / max) * (h - 4), count > 0 ? 2 : 0);
-        const x = 1 + i * (barW + gap);
-        const y = h - 2 - barH;
-        const isRecent = i >= days.length - 3;
-        const opacity = count === 0 ? 0.08 : isRecent ? 0.85 : 0.45;
+        const x = 1 + i * (cellW + gap);
+        const level = getLevel(count, max);
+        const isToday = showToday && i === n - 1;
         return (
           <rect
             key={i}
             x={x}
-            y={y}
-            width={barW}
-            height={Math.max(barH, 1)}
-            rx={1.5}
-            fill={count === 0 ? "rgba(255,255,255,.06)" : `rgba(45,212,191,${opacity})`}
-          />
+            y={1}
+            width={cellW}
+            height={height - 2}
+            rx={2}
+            fill={LEVELS[level]}
+            stroke={isToday ? "rgba(45,212,191,.5)" : "none"}
+            strokeWidth={isToday ? 1 : 0}
+          >
+            {isToday && (
+              <animate attributeName="stroke-opacity" values="0.3;0.8;0.3" dur="2s" repeatCount="indefinite" />
+            )}
+          </rect>
         );
       })}
-      <line x1={0} y1={h - 1} x2={w} y2={h - 1} stroke="rgba(255,255,255,.04)" strokeWidth={1} />
+    </svg>
+  );
+}
+
+// Mini version for live feed
+function MicroStrip({ days, width = 120, height = 10 }) {
+  if (!days || !days.length) return null;
+  const max = Math.max(...days, 1);
+  const last10 = days.slice(-10);
+  const cellW = Math.max(Math.floor((width - 2) / last10.length) - 1, 2);
+
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: "block", borderRadius: 2 }}>
+      {last10.map((count, i) => (
+        <rect
+          key={i}
+          x={1 + i * (cellW + 1)}
+          y={1}
+          width={cellW}
+          height={height - 2}
+          rx={1}
+          fill={LEVELS[getLevel(count, max)]}
+        />
+      ))}
     </svg>
   );
 }
 
 // ────────────────────────────────────────────
-// Product Card — receives data from parent
+// Shimmer Strip — loading placeholder
 // ────────────────────────────────────────────
-function ProductCard({ product, data, index }) {
+function ShimmerStrip({ width = 420, height = 18 }) {
+  return (
+    <div style={{ width, height, borderRadius: 3, background: "rgba(255,255,255,.02)", overflow: "hidden", position: "relative" }}>
+      <div style={{ width: "30%", height: "100%", background: "linear-gradient(90deg, transparent, rgba(45,212,191,.06), transparent)", position: "absolute", animation: "scan 2s ease-in-out infinite" }} />
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────
+// Product Row — single line in the matrix
+// ────────────────────────────────────────────
+function ProductRow({ product, data, rank, expanded, onToggle }) {
   const weeks = data?.weeks || null;
-  const fetchedAt = data?.fetched_at || null;
-  const status = data?.status || "pending"; // pending | loading | loaded | error
+  const status = data?.status || "pending";
   const errorMsg = data?.error || null;
 
-  const days14 = useMemo(() => getLast14Days(weeks), [weeks]);
-  const recent4wk = useMemo(() => recentTotal(weeks, 4), [weeks]);
+  const days21 = useMemo(() => getLast21Days(weeks), [weeks]);
+  const momentum = useMemo(() => getMomentumScore(weeks), [weeks]);
   const trend = useMemo(() => getTrend(weeks), [weeks]);
-  const todayCommits = days14 ? days14[days14.length - 1] : 0;
+  const total4wk = useMemo(() => recentTotal(weeks, 4), [weeks]);
+  const todayCommits = days21 ? days21[days21.length - 1] : 0;
+
+  const isHot = momentum > 1.5;
+  const isSurging = momentum > 2;
 
   return (
-    <div className="activity-card" style={{ animation: `fi .4s ease ${Math.min(index * 0.03, 0.5)}s both` }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--t1)", letterSpacing: "-.01em" }}>{product.name}</span>
-            {trend && (
-              <span style={{ fontSize: 10, fontWeight: 700, fontFamily: "var(--m)", color: trend.dir === "up" ? "var(--up)" : "var(--dn)", padding: "1px 6px", borderRadius: 3, background: trend.dir === "up" ? "rgba(22,163,74,.1)" : "rgba(220,38,38,.1)" }}>
-                {trend.dir === "up" ? "\u2191" : "\u2193"} {trend.pct}%
-              </span>
-            )}
+    <div style={{ marginBottom: expanded ? 0 : 0 }}>
+      <div
+        className="pulse-row"
+        onClick={onToggle}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 0,
+          padding: "6px 16px 6px 0",
+          borderBottom: expanded ? "none" : "1px solid rgba(255,255,255,.03)",
+          cursor: "pointer",
+          transition: "background .15s",
+          position: "relative",
+          borderLeft: isSurging ? "2px solid rgba(45,212,191,.5)" : isHot ? "2px solid rgba(45,212,191,.2)" : "2px solid transparent",
+        }}
+      >
+        {/* Rank */}
+        <span style={{ width: 36, textAlign: "right", fontSize: 10, fontFamily: "var(--m)", color: rank <= 3 && status === "loaded" ? "var(--g)" : "var(--t4)", fontWeight: rank <= 3 && status === "loaded" ? 700 : 400, flexShrink: 0, paddingRight: 12 }}>
+          {status === "loaded" ? rank : "\u00B7\u00B7"}
+        </span>
+
+        {/* Name + Category */}
+        <div style={{ width: 160, flexShrink: 0, minWidth: 0, paddingRight: 12 }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--t1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: "-.01em" }}>
+            {product.name}
           </div>
-          <div style={{ fontSize: 10, fontFamily: "var(--m)", color: "var(--t4)", marginTop: 2 }}>{product.repo}</div>
+          <div style={{ fontSize: 9, fontFamily: "var(--m)", color: "var(--t4)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {product.category}
+          </div>
         </div>
-        <span style={{ fontSize: 9, fontWeight: 600, fontFamily: "var(--m)", padding: "3px 8px", borderRadius: 4, background: "rgba(255,255,255,.03)", border: "1px solid var(--b1)", color: "var(--t4)", whiteSpace: "nowrap" }}>{product.category}</span>
+
+        {/* Spectrogram */}
+        <div style={{ flex: 1, minWidth: 0, paddingRight: 12 }}>
+          {status === "pending" || status === "loading" ? (
+            <ShimmerStrip width={400} height={18} />
+          ) : status === "error" ? (
+            <div style={{ height: 18, borderRadius: 3, background: "rgba(220,38,38,.04)", display: "flex", alignItems: "center", paddingLeft: 8 }}>
+              <span style={{ fontSize: 9, color: "rgba(220,38,38,.5)", fontFamily: "var(--m)" }}>{errorMsg || "failed"}</span>
+            </div>
+          ) : days21 ? (
+            <SpectrogramStrip days={days21} width={400} height={18} />
+          ) : (
+            <div style={{ height: 18, borderRadius: 3, background: "rgba(255,255,255,.02)" }} />
+          )}
+        </div>
+
+        {/* Today */}
+        <div style={{ width: 44, flexShrink: 0, textAlign: "right", paddingRight: 12 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: todayCommits > 0 ? "var(--g)" : "var(--t4)" }}>
+            {status === "loaded" ? todayCommits : "\u2013"}
+          </span>
+        </div>
+
+        {/* 4wk total */}
+        <div style={{ width: 52, flexShrink: 0, textAlign: "right", paddingRight: 12 }}>
+          <span style={{ fontSize: 11, fontWeight: 600, fontFamily: "var(--m)", color: total4wk > 0 ? "var(--t1)" : "var(--t4)" }}>
+            {status === "loaded" ? total4wk : "\u2013"}
+          </span>
+        </div>
+
+        {/* Trend */}
+        <div style={{ width: 60, flexShrink: 0, textAlign: "right" }}>
+          {trend ? (
+            <span style={{
+              fontSize: 10, fontWeight: 700, fontFamily: "var(--m)",
+              color: trend.dir === "up" ? "var(--up)" : "var(--dn)",
+              padding: "1px 6px", borderRadius: 3,
+              background: trend.dir === "up" ? "rgba(22,163,74,.08)" : "rgba(220,38,38,.08)",
+            }}>
+              {trend.dir === "up" ? "\u2191" : "\u2193"}{trend.pct}%
+            </span>
+          ) : status === "loaded" ? (
+            <span style={{ fontSize: 10, fontFamily: "var(--m)", color: "var(--t4)" }}>\u2013</span>
+          ) : null}
+        </div>
       </div>
 
-      {/* Activity visualization */}
-      {status === "pending" || status === "loading" ? (
-        <div style={{ height: 48, borderRadius: 6, background: "rgba(255,255,255,.02)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ width: "50%", height: 3, borderRadius: 2, background: "rgba(255,255,255,.04)", overflow: "hidden", position: "relative" }}>
-            <div style={{ width: "30%", height: "100%", borderRadius: 2, background: "rgba(45,212,191,.3)", position: "absolute", animation: "scan 1.5s ease-in-out infinite" }} />
+      {/* Expanded detail */}
+      {expanded && weeks && (
+        <div style={{
+          padding: "12px 16px 16px 48px",
+          background: "var(--s1)",
+          borderBottom: "1px solid var(--b1)",
+          borderLeft: "2px solid rgba(45,212,191,.3)",
+          animation: "fi .25s ease",
+        }}>
+          <div style={{ display: "flex", gap: 24, marginBottom: 12 }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--t4)", fontFamily: "var(--m)" }}>Repo</span>
+              <a href={`https://github.com/${product.repo}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, fontFamily: "var(--m)", color: "var(--g)", textDecoration: "none" }}>
+                {product.repo}
+              </a>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--t4)", fontFamily: "var(--m)" }}>Momentum</span>
+              <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: momentum > 1.5 ? "var(--g)" : "var(--t1)" }}>
+                {momentum === 999 ? "NEW" : momentum > 0 ? `${momentum.toFixed(1)}x` : "\u2013"}
+              </span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--t4)", fontFamily: "var(--m)" }}>Today</span>
+              <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: todayCommits > 0 ? "var(--g)" : "var(--t3)" }}>{todayCommits}</span>
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+              <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--t4)", fontFamily: "var(--m)" }}>4wk</span>
+              <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: "var(--t1)" }}>{total4wk}</span>
+            </div>
+            {data?.fetched_at && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+                <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--t4)", fontFamily: "var(--m)" }}>Cached</span>
+                <span style={{ fontSize: 11, fontFamily: "var(--m)", color: "var(--t3)" }}>{timeAgo(data.fetched_at)}</span>
+              </div>
+            )}
           </div>
-        </div>
-      ) : days14 ? (
-        <DailyBars days={days14} w={280} h={48} />
-      ) : status === "error" ? (
-        <div style={{ height: 48, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 6, background: "rgba(220,38,38,.04)", border: "1px solid rgba(220,38,38,.1)" }}>
-          <span style={{ fontSize: 10, color: "var(--dn)", fontFamily: "var(--m)" }}>{errorMsg || "fetch failed"}</span>
-        </div>
-      ) : (
-        <div style={{ height: 48, display: "flex", alignItems: "center", justifyContent: "center", borderRadius: 6, background: "rgba(255,255,255,.02)" }}>
-          <span style={{ fontSize: 10, color: "var(--t4)", fontFamily: "var(--m)" }}>No data yet</span>
-        </div>
-      )}
-
-      {/* Stats row */}
-      {weeks && (
-        <div style={{ display: "flex", gap: 14, marginTop: 8, alignItems: "center" }}>
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--t4)", fontFamily: "var(--m)" }}>Today</span>
-            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "var(--m)", color: todayCommits > 0 ? "var(--g)" : "var(--t3)" }}>{todayCommits}</span>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column" }}>
-            <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--t4)", fontFamily: "var(--m)" }}>4 wk</span>
-            <span style={{ fontSize: 13, fontWeight: 700, fontFamily: "var(--m)", color: "var(--t1)" }}>{recent4wk}</span>
-          </div>
-          {fetchedAt && (
-            <span style={{ fontSize: 9, color: "var(--t4)", fontFamily: "var(--m)", marginLeft: "auto" }}>{timeAgo(fetchedAt)}</span>
-          )}
+          <CommitHeatmap weeks={weeks} fetchedAt={data?.fetched_at} />
         </div>
       )}
     </div>
@@ -152,65 +291,101 @@ function ProductCard({ product, data, index }) {
 }
 
 // ────────────────────────────────────────────
-// Breakout Card — momentum discovery
+// Top Movers Ribbon — horizontal ticker
 // ────────────────────────────────────────────
-function BreakoutCard({ item, index }) {
-  const [heatWeeks, setHeatWeeks] = useState(null);
-  const surging = item.topics?.includes("surging");
-  const repoPath = item.url?.match(/github\.com\/([^/]+\/[^/]+)/)?.[1] || null;
-  const isNew = item.discovered_at && (Date.now() - new Date(item.discovered_at).getTime()) < 600_000;
-
-  useEffect(() => {
-    if (!repoPath) return;
-    fetch(`/api/commit-activity?repo=${encodeURIComponent(repoPath)}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { if (d?.weeks) setHeatWeeks(d.weeks); })
-      .catch(() => {});
-  }, [repoPath]);
-
-  const days14 = useMemo(() => getLast14Days(heatWeeks), [heatWeeks]);
+function TopMoversRibbon({ movers }) {
+  if (!movers || movers.length === 0) return null;
 
   return (
-    <a href={item.url} target="_blank" rel="noopener noreferrer" className="breakout-card"
-      style={{
-        display: "block", textDecoration: "none", color: "inherit",
-        padding: "12px 14px", borderRadius: 10, background: "var(--s1)",
-        border: "1px solid var(--b1)",
-        borderLeft: surging ? "2px solid var(--g)" : "1px solid var(--b1)",
-        animation: `fi .35s ease ${Math.min(index * 0.05, 0.4)}s both${isNew ? ", bk-glow 2s ease-in-out infinite" : ""}`,
-        transition: "all .2s", position: "relative", overflow: "hidden",
-      }}>
-      <div style={{ position: "absolute", top: 0, left: 0, right: 0, height: 1, background: surging ? "linear-gradient(90deg, transparent, rgba(45,212,191,.15), transparent)" : "linear-gradient(90deg, transparent, rgba(255,255,255,.04), transparent)" }} />
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 6, minWidth: 0, flex: 1 }}>
-          {isNew && <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--g)", animation: "lp 2s ease-in-out infinite", flexShrink: 0 }} />}
-          <span style={{ fontSize: 12, fontWeight: 700, color: "var(--t1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</span>
-          {surging && <span style={{ fontSize: 8, fontWeight: 700, fontFamily: "var(--m)", padding: "1px 5px", borderRadius: 3, background: "rgba(45,212,191,.12)", color: "var(--g)", letterSpacing: ".04em", flexShrink: 0 }}>SURGING</span>}
-        </div>
-        <span style={{ fontSize: 9, color: "var(--t4)", fontFamily: "var(--m)", flexShrink: 0, marginLeft: 6 }}>
-          {item.discovered_at ? timeAgo(item.discovered_at) : ""}
+    <div style={{
+      borderBottom: "1px solid var(--b1)",
+      background: "rgba(10,11,16,.6)",
+      overflow: "hidden",
+      position: "relative",
+    }}>
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 0,
+        padding: "0 16px",
+        height: 36,
+        overflowX: "auto",
+        overflowY: "hidden",
+      }}
+      className="movers-ribbon"
+      >
+        <span style={{ fontSize: 9, fontWeight: 700, fontFamily: "var(--m)", color: "var(--t3)", letterSpacing: ".08em", marginRight: 12, whiteSpace: "nowrap", flexShrink: 0 }}>
+          TOP MOVERS
         </span>
+        {movers.map((m, i) => (
+          <div key={m.id} style={{
+            display: "flex", alignItems: "center", gap: 6,
+            padding: "4px 12px",
+            borderRight: "1px solid rgba(255,255,255,.04)",
+            whiteSpace: "nowrap", flexShrink: 0,
+            animation: `fi .3s ease ${i * 0.05}s both`,
+          }}>
+            <span style={{ fontSize: 11, fontWeight: 600, color: "var(--t1)", letterSpacing: "-.01em" }}>{m.name}</span>
+            {m.days21 && <MicroStrip days={m.days21} width={60} height={8} />}
+            <span style={{
+              fontSize: 10, fontWeight: 700, fontFamily: "var(--m)",
+              color: m.trend?.dir === "up" ? "var(--up)" : m.trend?.dir === "down" ? "var(--dn)" : "var(--t3)",
+            }}>
+              {m.trend ? `${m.trend.dir === "up" ? "\u2191" : "\u2193"}${m.trend.pct}%` : "\u2013"}
+            </span>
+          </div>
+        ))}
       </div>
-      <div style={{ fontSize: 10, color: "var(--t3)", fontFamily: "var(--m)", marginBottom: 8, display: "flex", alignItems: "center", gap: 6 }}>
-        <span>{item.author || repoPath}</span>
-        {item.stars > 0 && <span style={{ color: "var(--t4)" }}>&#9733; {item.stars >= 1000 ? `${(item.stars / 1000).toFixed(1)}k` : item.stars}</span>}
-      </div>
-      {days14 ? (
-        <div style={{ marginBottom: 8, opacity: 0.9 }}><DailyBars days={days14} w={280} h={32} /></div>
-      ) : heatWeeks ? (
-        <div style={{ marginBottom: 8, opacity: 0.9 }}><CompactHeatmap weeks={heatWeeks} w={280} h={32} /></div>
-      ) : null}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-        {item.upvotes > 0 && <span style={{ fontSize: 10, fontWeight: 600, fontFamily: "var(--m)", color: "var(--up)" }}>{item.upvotes} /4wk</span>}
-        {item.language && <span style={{ fontSize: 9, fontFamily: "var(--m)", color: "var(--t4)", padding: "1px 5px", borderRadius: 3, background: "rgba(255,255,255,.03)", border: "1px solid var(--b1)" }}>{item.language}</span>}
-        {item.category && <span style={{ fontSize: 9, fontFamily: "var(--m)", color: "var(--t4)", padding: "1px 5px", borderRadius: 3, background: "rgba(255,255,255,.03)", border: "1px solid var(--b1)" }}>{item.category}</span>}
-      </div>
-    </a>
+    </div>
   );
 }
 
 // ────────────────────────────────────────────
-// Fetch queue — processes repos 5 at a time
+// Live Feed Card — sidebar entry
+// ────────────────────────────────────────────
+function LiveFeedCard({ item, index }) {
+  return (
+    <div style={{
+      padding: "8px 10px",
+      borderRadius: 6,
+      background: "var(--s1)",
+      border: "1px solid var(--b1)",
+      borderLeft: item.surging ? "2px solid var(--g)" : "1px solid var(--b1)",
+      animation: `fi .3s ease ${Math.min(index * 0.04, 0.3)}s both`,
+      transition: "all .15s",
+    }}
+    className="feed-card"
+    >
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 5, minWidth: 0, flex: 1 }}>
+          {item.isNew && <span style={{ width: 4, height: 4, borderRadius: "50%", background: "var(--g)", animation: "lp 2s ease-in-out infinite", flexShrink: 0 }} />}
+          <span style={{ fontSize: 11, fontWeight: 700, color: "var(--t1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.name}</span>
+        </div>
+        <span style={{ fontSize: 9, fontFamily: "var(--m)", color: "var(--t4)", flexShrink: 0, marginLeft: 4 }}>
+          {item.fetchedAt ? timeAgo(item.fetchedAt) : ""}
+        </span>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+        {item.days21 && <MicroStrip days={item.days21} width={100} height={8} />}
+        <span style={{ fontSize: 10, fontWeight: 700, fontFamily: "var(--m)", color: item.surging ? "var(--g)" : "var(--t2)" }}>
+          {item.momentum === 999 ? "NEW" : `${item.momentum.toFixed(1)}x`}
+        </span>
+      </div>
+      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <span style={{ fontSize: 9, fontFamily: "var(--m)", color: "var(--t3)" }}>{item.total4wk}/4wk</span>
+        <span style={{ fontSize: 9, fontFamily: "var(--m)", color: "var(--t4)" }}>{item.category}</span>
+        {item.surging && (
+          <span style={{ fontSize: 8, fontWeight: 700, fontFamily: "var(--m)", padding: "1px 4px", borderRadius: 2, background: "rgba(45,212,191,.1)", color: "var(--g)", letterSpacing: ".04em" }}>
+            SURGE
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────
+// Fetch Queue — processes repos N at a time
 // ────────────────────────────────────────────
 function useFetchQueue(repos) {
   const [dataMap, setDataMap] = useState({});
@@ -218,14 +393,13 @@ function useFetchQueue(repos) {
   const queueRef = useRef([]);
   const activeRef = useRef(0);
   const startedRef = useRef(false);
-  const CONCURRENCY = 5;
+  const CONCURRENCY = 8;
 
   const processNext = useCallback(() => {
     while (activeRef.current < CONCURRENCY && queueRef.current.length > 0) {
       const { repo, id } = queueRef.current.shift();
       activeRef.current++;
 
-      // Mark as loading
       setDataMap((prev) => ({ ...prev, [id]: { ...prev[id], status: "loading" } }));
 
       fetch(`/api/commit-activity?repo=${encodeURIComponent(repo)}`)
@@ -271,16 +445,16 @@ function useFetchQueue(repos) {
 }
 
 // ────────────────────────────────────────────
-// Main Activity Page
+// Main: Terminal Pulse
 // ────────────────────────────────────────────
 export default function ActivityClient() {
   const [cat, setCat] = useState("All");
   const [q, setQ] = useState("");
+  const [expandedId, setExpandedId] = useState(null);
   const [tick, setTick] = useState(0);
 
   // Breakout feed
   const [breakouts, setBreakouts] = useState([]);
-  const [breakoutsLoading, setBreakoutsLoading] = useState(true);
 
   // Build product list
   const products = useMemo(() => {
@@ -289,29 +463,16 @@ export default function ActivityClient() {
       .map((p) => ({ id: p.id, name: p.name, category: p.cat, repo: `${p.g.o}/${p.g.r}` }));
   }, []);
 
-  // Centralized fetch queue — 5 concurrent requests
+  // Fetch queue — 8 concurrent
   const { dataMap, progress } = useFetchQueue(products);
 
-  // ─── FETCH BREAKOUTS ───
-  useEffect(() => {
-    fetch("/api/scanner?source=github-momentum&limit=50")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (d?.discoveries) {
-          setBreakouts(d.discoveries.sort((a, b) => new Date(b.discovered_at) - new Date(a.discovered_at)));
-        }
-        setBreakoutsLoading(false);
-      })
-      .catch(() => setBreakoutsLoading(false));
-  }, []);
-
-  // ─── SUPABASE REAL-TIME FOR BREAKOUTS ───
+  // Supabase real-time for breakouts
   useEffect(() => {
     const supabase = getSupabase();
     if (!supabase) return;
 
     const channel = supabase
-      .channel("activity-breakouts")
+      .channel("pulse-breakouts")
       .on("postgres_changes", {
         event: "INSERT", schema: "public", table: "scanner_discoveries",
         filter: "source=eq.github-momentum",
@@ -319,7 +480,7 @@ export default function ActivityClient() {
         setBreakouts((prev) => {
           const id = payload.new.id || payload.new.external_id;
           if (prev.some((d) => (d.id || d.external_id) === id)) return prev;
-          return [payload.new, ...prev].slice(0, 100);
+          return [payload.new, ...prev].slice(0, 50);
         });
       })
       .subscribe();
@@ -327,18 +488,26 @@ export default function ActivityClient() {
     return () => supabase.removeChannel(channel);
   }, []);
 
-  // Tick for relative time
+  // Fetch breakouts
   useEffect(() => {
-    const id = setInterval(() => setTick((t) => t + 1), 10_000);
-    return () => clearInterval(id);
+    fetch("/api/scanner?source=github-momentum&limit=50")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => { if (d?.discoveries) setBreakouts(d.discoveries); })
+      .catch(() => {});
   }, []);
 
-  // Background scan trigger
+  // Background scanner trigger
   useEffect(() => {
     const trigger = () => { fetch("/api/scanner?trigger=1").catch(() => {}); };
     trigger();
     const i = setInterval(trigger, 60_000);
     return () => clearInterval(i);
+  }, []);
+
+  // Tick for relative time
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), 10_000);
+    return () => clearInterval(id);
   }, []);
 
   // Categories
@@ -351,19 +520,93 @@ export default function ActivityClient() {
     Object.entries(catCounts).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([c]) => c),
   [catCounts]);
 
-  // Filter
-  const filtered = useMemo(() => {
-    let items = products;
+  // Compute enriched product list with momentum, sorted
+  const enrichedProducts = useMemo(() => {
+    return products.map((p) => {
+      const d = dataMap[p.id];
+      const weeks = d?.weeks || null;
+      return {
+        ...p,
+        data: d,
+        momentum: getMomentumScore(weeks),
+        trend: getTrend(weeks),
+        days21: getLast21Days(weeks),
+        total4wk: recentTotal(weeks, 4),
+        status: d?.status || "pending",
+      };
+    });
+  }, [products, dataMap]);
+
+  // Sort by momentum (loaded items first, then by momentum desc)
+  const sorted = useMemo(() => {
+    let items = [...enrichedProducts];
     if (cat !== "All") items = items.filter((p) => p.category === cat);
     if (q) {
       const lq = q.toLowerCase();
       items = items.filter((p) => p.name.toLowerCase().includes(lq) || p.repo.toLowerCase().includes(lq) || p.category?.toLowerCase().includes(lq));
     }
+    items.sort((a, b) => {
+      // Loaded items first
+      if (a.status === "loaded" && b.status !== "loaded") return -1;
+      if (a.status !== "loaded" && b.status === "loaded") return 1;
+      // Then by momentum desc
+      return b.momentum - a.momentum;
+    });
     return items;
-  }, [products, cat, q]);
+  }, [enrichedProducts, cat, q]);
 
-  const surgingCount = breakouts.filter((b) => b.topics?.includes("surging")).length;
+  // Top movers — top 12 by trend percentage (loaded only)
+  const topMovers = useMemo(() => {
+    return enrichedProducts
+      .filter((p) => p.status === "loaded" && p.trend && p.total4wk > 0)
+      .sort((a, b) => (b.trend?.pct || 0) - (a.trend?.pct || 0))
+      .slice(0, 12);
+  }, [enrichedProducts]);
+
+  // Live feed — products with high momentum
+  const feedItems = useMemo(() => {
+    const hot = enrichedProducts
+      .filter((p) => p.status === "loaded" && p.momentum > 1.3 && p.total4wk > 0)
+      .sort((a, b) => b.momentum - a.momentum)
+      .slice(0, 30)
+      .map((p) => ({
+        id: p.id,
+        name: p.name,
+        category: p.category,
+        days21: p.days21,
+        momentum: p.momentum,
+        total4wk: p.total4wk,
+        surging: p.momentum > 2,
+        isNew: false,
+        fetchedAt: p.data?.fetched_at,
+      }));
+
+    // Also include scanner discoveries
+    const scannerItems = breakouts.map((b) => ({
+      id: `bk-${b.id || b.external_id}`,
+      name: b.name,
+      category: b.category || "Discovery",
+      days21: null,
+      momentum: b.momentum || 0,
+      total4wk: b.upvotes || 0,
+      surging: b.topics?.includes("surging"),
+      isNew: b.discovered_at && (Date.now() - new Date(b.discovered_at).getTime()) < 600_000,
+      fetchedAt: b.discovered_at,
+    }));
+
+    // Merge, dedupe, sort
+    const all = [...scannerItems, ...hot];
+    const seen = new Set();
+    return all.filter((item) => {
+      if (seen.has(item.name)) return false;
+      seen.add(item.name);
+      return true;
+    }).slice(0, 40);
+  }, [enrichedProducts, breakouts]);
+
   const pctDone = progress.total > 0 ? Math.round((progress.done / progress.total) * 100) : 0;
+  const loadedCount = enrichedProducts.filter((p) => p.status === "loaded").length;
+  const surgingCount = feedItems.filter((f) => f.surging).length;
 
   void tick;
 
@@ -372,176 +615,170 @@ export default function ActivityClient() {
 
       <style suppressHydrationWarning>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
-        @keyframes fi { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: translateY(0) } }
+        @keyframes fi { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: translateY(0) } }
         @keyframes lp { 0%,100% { opacity: .35 } 50% { opacity: 1 } }
-        @keyframes scan-line { 0% { transform: translateX(-100%) } 100% { transform: translateX(200%) } }
-        @keyframes scan { 0% { transform: translateX(-100%) } 100% { transform: translateX(100%) } }
-        @keyframes bk-glow { 0%,100% { box-shadow: 0 0 0 rgba(45,212,191,0) } 50% { box-shadow: 0 0 12px rgba(45,212,191,.12) } }
+        @keyframes scan { 0% { transform: translateX(-100%) } 100% { transform: translateX(400%) } }
+        @keyframes glow { 0%,100% { box-shadow: 0 0 0 rgba(45,212,191,0) } 50% { box-shadow: 0 0 8px rgba(45,212,191,.1) } }
         * { box-sizing: border-box; margin: 0; padding: 0; }
         ::selection { background: rgba(45,212,191,.12); }
-        ::-webkit-scrollbar { width: 5px; height: 5px; }
+        ::-webkit-scrollbar { width: 4px; height: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.06); border-radius: 3px; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.06); border-radius: 2px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.12); }
-        .activity-card { border: 1px solid var(--b1); border-radius: 10px; background: var(--s1); padding: 16px; transition: all .2s cubic-bezier(.4,0,.2,1); position: relative; overflow: hidden; }
-        .activity-card:hover { border-color: var(--b2); box-shadow: 0 4px 24px rgba(0,0,0,.2); }
-        .activity-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,.04), transparent); }
-        .breakout-card:hover { border-color: var(--b2) !important; background: var(--s2) !important; }
+        .pulse-row:hover { background: rgba(255,255,255,.02) !important; }
+        .feed-card:hover { border-color: var(--b2) !important; background: var(--s2) !important; }
         .pill { transition: all .15s; cursor: pointer; user-select: none; }
         .pill:hover { background: rgba(255,255,255,.06) !important; }
         .pill.on { background: var(--gd) !important; border-color: var(--gg) !important; color: var(--g) !important; }
         .link-hover { transition: all .15s; text-decoration: none; }
         .link-hover:hover { color: var(--g) !important; }
+        .movers-ribbon::-webkit-scrollbar { display: none; }
+        .movers-ribbon { -ms-overflow-style: none; scrollbar-width: none; }
         @media (max-width: 1024px) {
-          .activity-layout { flex-direction: column !important; }
-          .breakout-sidebar { width: 100% !important; position: relative !important; top: auto !important; border-right: none !important; border-bottom: 1px solid var(--b1) !important; height: auto !important; }
-          .breakout-feed { flex-direction: row !important; overflow-x: auto !important; overflow-y: hidden !important; padding-bottom: 8px !important; gap: 10px !important; max-height: none !important; }
-          .breakout-feed > a { min-width: 280px !important; flex-shrink: 0 !important; }
+          .pulse-layout { flex-direction: column !important; }
+          .pulse-sidebar { width: 100% !important; position: relative !important; top: auto !important; border-left: none !important; border-bottom: 1px solid var(--b1) !important; height: auto !important; max-height: 240px !important; }
+          .pulse-sidebar .feed-list { flex-direction: row !important; overflow-x: auto !important; overflow-y: hidden !important; }
+          .pulse-sidebar .feed-list > div { min-width: 200px !important; flex-shrink: 0 !important; }
         }
         @media (max-width: 768px) {
-          .activity-header { padding: 0 12px !important; }
-          .activity-toolbar { padding: 0 12px 12px !important; flex-direction: column !important; }
-          .activity-pills { max-width: 100% !important; overflow-x: auto !important; }
-          .activity-grid { grid-template-columns: 1fr !important; padding: 0 12px 40px !important; }
-          .activity-footer { padding: 16px 12px !important; flex-direction: column !important; gap: 6px !important; text-align: center !important; }
+          .pulse-header { padding: 0 12px !important; }
+          .pulse-toolbar { padding: 8px 12px !important; flex-direction: column !important; gap: 8px !important; }
+          .pulse-matrix { padding: 0 !important; }
+          .pulse-row { padding: 6px 8px 6px 0 !important; }
+          .row-name { width: 100px !important; }
+          .row-spectrogram { display: none !important; }
+          .movers-ribbon { padding: 0 12px !important; }
         }
       `}</style>
 
-      {/* Ambient Background */}
-      <div style={{ position: "fixed", inset: 0, pointerEvents: "none", zIndex: 0 }}>
-        <div style={{ position: "absolute", top: "-20%", left: "20%", width: "40vw", height: "40vw", borderRadius: "50%", background: "radial-gradient(circle, rgba(45,212,191,.02) 0%, transparent 70%)", filter: "blur(80px)" }} />
-        <div style={{ position: "absolute", bottom: "10%", right: "10%", width: "35vw", height: "35vw", borderRadius: "50%", background: "radial-gradient(circle, rgba(45,212,191,.01) 0%, transparent 70%)", filter: "blur(80px)" }} />
-      </div>
-
       {/* ─── HEADER ─── */}
-      <header className="activity-header" style={{ padding: "0 32px", height: 56, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--b1)", background: "rgba(10,11,16,.88)", backdropFilter: "blur(24px) saturate(180%)", position: "sticky", top: 0, zIndex: 100 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-          <a href="/dashboard" style={{ display: "flex", alignItems: "center", gap: 10, textDecoration: "none", color: "var(--t1)" }}>
-            <span style={{ fontSize: 15, fontWeight: 800, fontFamily: "var(--m)", letterSpacing: "-.02em" }}>
+      <header className="pulse-header" style={{ padding: "0 24px", height: 48, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--b1)", background: "rgba(10,11,16,.92)", backdropFilter: "blur(24px) saturate(180%)", position: "sticky", top: 0, zIndex: 100 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <a href="/dashboard" style={{ display: "flex", alignItems: "center", gap: 8, textDecoration: "none", color: "var(--t1)" }}>
+            <span style={{ fontSize: 14, fontWeight: 800, fontFamily: "var(--m)", letterSpacing: "-.02em" }}>
               agent<span style={{ color: "var(--g)" }}>screener</span>
             </span>
           </a>
-          <div style={{ height: 20, width: 1, background: "var(--b2)" }} />
-          <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: "var(--t2)", letterSpacing: ".06em", padding: "3px 10px", borderRadius: 4, background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.06)" }}>ACTIVITY</span>
+          <div style={{ height: 16, width: 1, background: "var(--b2)" }} />
+          <span style={{ fontSize: 10, fontWeight: 700, fontFamily: "var(--m)", color: "var(--g)", letterSpacing: ".1em" }}>PULSE</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          {/* Fetch progress indicator */}
-          {progress.total > 0 && progress.done < progress.total && (
-            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 12px", borderRadius: 4, background: "rgba(255,255,255,.02)", border: "1px solid rgba(255,255,255,.06)" }}>
-              <div style={{ width: 40, height: 3, borderRadius: 2, background: "rgba(255,255,255,.06)", overflow: "hidden" }}>
-                <div style={{ width: `${pctDone}%`, height: "100%", borderRadius: 2, background: "var(--g)", transition: "width .3s" }} />
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          {/* Progress */}
+          {progress.total > 0 && (
+            <div style={{ display: "flex", alignItems: "center", gap: 6, padding: "3px 10px", borderRadius: 3, background: "rgba(255,255,255,.02)", border: "1px solid rgba(255,255,255,.04)" }}>
+              <div style={{ width: 32, height: 2, borderRadius: 1, background: "rgba(255,255,255,.06)", overflow: "hidden" }}>
+                <div style={{ width: `${pctDone}%`, height: "100%", borderRadius: 1, background: progress.done < progress.total ? "var(--g)" : "rgba(255,255,255,.12)", transition: "width .3s" }} />
               </div>
-              <span style={{ fontSize: 9, fontFamily: "var(--m)", color: "var(--t3)" }}>{progress.done}/{progress.total}</span>
+              <span style={{ fontSize: 9, fontFamily: "var(--m)", color: "var(--t4)" }}>
+                {progress.done}/{progress.total}
+              </span>
             </div>
           )}
-          <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 14px", borderRadius: 4, background: "rgba(255,255,255,.02)", border: "1px solid rgba(255,255,255,.06)" }}>
-            <span style={{ width: 5, height: 5, borderRadius: "50%", background: "#2DD4BF", animation: "lp 2s ease-in-out infinite" }} />
-            <span style={{ fontSize: 10, fontWeight: 600, color: "var(--t3)", fontFamily: "var(--m)", letterSpacing: ".04em" }}>LIVE</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "3px 10px", borderRadius: 3, background: "rgba(255,255,255,.02)", border: "1px solid rgba(255,255,255,.04)" }}>
+            <span style={{ width: 4, height: 4, borderRadius: "50%", background: "#2DD4BF", animation: "lp 2s ease-in-out infinite" }} />
+            <span style={{ fontSize: 9, fontWeight: 600, color: "var(--t4)", fontFamily: "var(--m)", letterSpacing: ".06em" }}>LIVE</span>
           </div>
-          <a href="/dashboard" className="link-hover" style={{ fontSize: 11, fontWeight: 600, color: "var(--t3)", padding: "5px 12px", borderRadius: 4, border: "1px solid var(--b1)", textDecoration: "none", fontFamily: "var(--m)" }}>Dashboard</a>
-          <a href="/screener" className="link-hover" style={{ fontSize: 11, fontWeight: 600, color: "var(--t3)", padding: "5px 12px", borderRadius: 4, border: "1px solid var(--b1)", textDecoration: "none", fontFamily: "var(--m)" }}>Screener</a>
+          <a href="/dashboard" className="link-hover" style={{ fontSize: 10, fontWeight: 600, color: "var(--t4)", padding: "4px 10px", borderRadius: 3, border: "1px solid var(--b1)", textDecoration: "none", fontFamily: "var(--m)" }}>Dashboard</a>
+          <a href="/screener" className="link-hover" style={{ fontSize: 10, fontWeight: 600, color: "var(--t4)", padding: "4px 10px", borderRadius: 3, border: "1px solid var(--b1)", textDecoration: "none", fontFamily: "var(--m)" }}>Screener</a>
         </div>
       </header>
 
+      {/* ─── TOP MOVERS RIBBON ─── */}
+      <TopMoversRibbon movers={topMovers} />
+
       {/* ─── MAIN LAYOUT ─── */}
-      <div className="activity-layout" style={{ display: "flex", position: "relative", zIndex: 1, minHeight: "calc(100vh - 56px)" }}>
+      <div className="pulse-layout" style={{ display: "flex", position: "relative", zIndex: 1, minHeight: "calc(100vh - 84px)" }}>
 
-        {/* ─── LEFT: BREAKOUT FEED ─── */}
-        <aside className="breakout-sidebar" style={{ width: 340, flexShrink: 0, borderRight: "1px solid var(--b1)", background: "rgba(10,11,16,.5)", position: "sticky", top: 56, height: "calc(100vh - 56px)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <div style={{ padding: "16px 16px 12px", borderBottom: "1px solid var(--b1)", flexShrink: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <span style={{ width: 6, height: 6, borderRadius: "50%", background: "var(--g)", animation: "lp 2s ease-in-out infinite" }} />
-                <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", letterSpacing: ".08em", color: "var(--t2)" }}>BREAKOUTS</span>
-              </div>
-              <span style={{ fontSize: 10, fontFamily: "var(--m)", color: "var(--t3)" }}>{breakouts.length} detected</span>
-            </div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--t4)", fontFamily: "var(--m)" }}>Surging</span>
-                <span style={{ fontSize: 16, fontWeight: 800, fontFamily: "var(--m)", color: "var(--g)" }}>{surgingCount}</span>
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-                <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--t4)", fontFamily: "var(--m)" }}>Momentum</span>
-                <span style={{ fontSize: 16, fontWeight: 800, fontFamily: "var(--m)", color: "var(--t1)" }}>{breakouts.length}</span>
-              </div>
-            </div>
-          </div>
-          <div className="breakout-feed" style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "10px 12px", display: "flex", flexDirection: "column", gap: 8 }}>
-            {breakoutsLoading ? (
-              <div style={{ padding: "40px 0", textAlign: "center" }}>
-                <div style={{ width: 80, height: 3, borderRadius: 2, background: "rgba(255,255,255,.04)", overflow: "hidden", margin: "0 auto 12px", position: "relative" }}>
-                  <div style={{ width: "30%", height: "100%", borderRadius: 2, background: "rgba(45,212,191,.3)", position: "absolute", animation: "scan 1.5s ease-in-out infinite" }} />
-                </div>
-                <div style={{ fontSize: 10, color: "var(--t4)", fontFamily: "var(--m)" }}>Scanning for breakouts...</div>
-              </div>
-            ) : breakouts.length === 0 ? (
-              <div style={{ padding: "40px 0", textAlign: "center" }}>
-                <div style={{ fontSize: 24, marginBottom: 8, opacity: 0.3 }}>&#9672;</div>
-                <div style={{ fontSize: 11, color: "var(--t3)", fontFamily: "var(--m)", lineHeight: 1.5 }}>
-                  No momentum breakouts yet.<br />Scanner runs every minute.
-                </div>
-              </div>
-            ) : breakouts.map((item, i) => (
-              <BreakoutCard key={item.id || item.external_id || i} item={item} index={i} />
-            ))}
-          </div>
-        </aside>
+        {/* ─── LEFT: SPECTROGRAM MATRIX ─── */}
+        <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
 
-        {/* ─── RIGHT: PRODUCT GRID ─── */}
-        <main style={{ flex: 1, minWidth: 0 }}>
           {/* Toolbar */}
-          <div className="activity-toolbar" style={{ padding: "16px 24px", display: "flex", alignItems: "center", gap: 12 }}>
-            <div className="activity-pills" style={{ display: "flex", gap: 6, flex: 1, overflow: "hidden", flexWrap: "wrap" }}>
-              <button className={`pill${cat === "All" ? " on" : ""}`} onClick={() => setCat("All")} style={{ padding: "5px 14px", borderRadius: 6, background: "rgba(255,255,255,.03)", border: "1px solid var(--b1)", color: "var(--t2)", fontSize: 11, fontWeight: 600, fontFamily: "var(--m)" }}>
+          <div className="pulse-toolbar" style={{ padding: "10px 16px", display: "flex", alignItems: "center", gap: 8, borderBottom: "1px solid var(--b1)", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 4, flex: 1, flexWrap: "wrap" }}>
+              <button className={`pill${cat === "All" ? " on" : ""}`} onClick={() => setCat("All")} style={{ padding: "3px 10px", borderRadius: 4, background: "rgba(255,255,255,.02)", border: "1px solid var(--b1)", color: "var(--t3)", fontSize: 10, fontWeight: 600, fontFamily: "var(--m)" }}>
                 All ({products.length})
               </button>
               {topCats.map((c) => (
-                <button key={c} className={`pill${cat === c ? " on" : ""}`} onClick={() => setCat(c)} style={{ padding: "5px 14px", borderRadius: 6, background: "rgba(255,255,255,.03)", border: "1px solid var(--b1)", color: "var(--t2)", fontSize: 11, fontWeight: 600, fontFamily: "var(--m)", whiteSpace: "nowrap" }}>
-                  {c} ({catCounts[c]})
+                <button key={c} className={`pill${cat === c ? " on" : ""}`} onClick={() => setCat(c)} style={{ padding: "3px 10px", borderRadius: 4, background: "rgba(255,255,255,.02)", border: "1px solid var(--b1)", color: "var(--t3)", fontSize: 10, fontWeight: 600, fontFamily: "var(--m)", whiteSpace: "nowrap" }}>
+                  {c}
                 </button>
               ))}
             </div>
             <div style={{ position: "relative" }}>
-              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search..."
-                style={{ width: 180, padding: "7px 12px 7px 30px", borderRadius: 6, border: "1px solid var(--b1)", background: "rgba(255,255,255,.03)", color: "var(--t1)", fontSize: 12, fontFamily: "var(--m)", outline: "none" }} />
-              <span style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", fontSize: 12, color: "var(--t3)", pointerEvents: "none" }}>&#8981;</span>
+              <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter..."
+                style={{ width: 140, padding: "5px 10px 5px 24px", borderRadius: 4, border: "1px solid var(--b1)", background: "rgba(255,255,255,.02)", color: "var(--t1)", fontSize: 11, fontFamily: "var(--m)", outline: "none" }} />
+              <span style={{ position: "absolute", left: 8, top: "50%", transform: "translateY(-50%)", fontSize: 10, color: "var(--t4)", pointerEvents: "none" }}>&#8981;</span>
             </div>
           </div>
 
-          {/* Progress bar when loading */}
-          {progress.total > 0 && progress.done < progress.total && (
-            <div style={{ padding: "0 24px 12px" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 14px", borderRadius: 8, background: "var(--s1)", border: "1px solid var(--b1)" }}>
-                <div style={{ flex: 1, height: 4, borderRadius: 2, background: "rgba(255,255,255,.04)", overflow: "hidden" }}>
-                  <div style={{ width: `${pctDone}%`, height: "100%", borderRadius: 2, background: "var(--g)", transition: "width .3s ease" }} />
-                </div>
-                <span style={{ fontSize: 10, fontFamily: "var(--m)", color: "var(--t3)", whiteSpace: "nowrap" }}>
-                  Fetching {progress.done}/{progress.total}
-                  {progress.errors > 0 && <span style={{ color: "var(--dn)" }}> · {progress.errors} errors</span>}
-                </span>
-              </div>
-            </div>
-          )}
+          {/* Column headers */}
+          <div style={{ display: "flex", alignItems: "center", padding: "6px 16px 4px 0", borderBottom: "1px solid rgba(255,255,255,.04)" }}>
+            <span style={{ width: 36, textAlign: "right", fontSize: 8, fontFamily: "var(--m)", color: "var(--t4)", letterSpacing: ".06em", paddingRight: 12 }}>#</span>
+            <span className="row-name" style={{ width: 160, fontSize: 8, fontFamily: "var(--m)", color: "var(--t4)", letterSpacing: ".06em", paddingRight: 12 }}>PRODUCT</span>
+            <span className="row-spectrogram" style={{ flex: 1, fontSize: 8, fontFamily: "var(--m)", color: "var(--t4)", letterSpacing: ".06em", paddingRight: 12 }}>21-DAY SPECTROGRAM</span>
+            <span style={{ width: 44, textAlign: "right", fontSize: 8, fontFamily: "var(--m)", color: "var(--t4)", letterSpacing: ".06em", paddingRight: 12 }}>TODAY</span>
+            <span style={{ width: 52, textAlign: "right", fontSize: 8, fontFamily: "var(--m)", color: "var(--t4)", letterSpacing: ".06em", paddingRight: 12 }}>4WK</span>
+            <span style={{ width: 60, textAlign: "right", fontSize: 8, fontFamily: "var(--m)", color: "var(--t4)", letterSpacing: ".06em" }}>TREND</span>
+          </div>
 
-          {/* Grid */}
-          <div className="activity-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12, padding: "0 24px 40px" }}>
-            {filtered.map((p, i) => (
-              <ProductCard key={p.id} product={p} data={dataMap[p.id]} index={i} />
+          {/* Matrix rows */}
+          <div className="pulse-matrix" style={{ flex: 1, overflowY: "auto" }}>
+            {sorted.map((p, i) => (
+              <ProductRow
+                key={p.id}
+                product={p}
+                data={dataMap[p.id]}
+                rank={i + 1}
+                expanded={expandedId === p.id}
+                onToggle={() => setExpandedId(expandedId === p.id ? null : p.id)}
+              />
             ))}
           </div>
 
           {/* Footer */}
-          <footer className="activity-footer" style={{ padding: "20px 24px", borderTop: "1px solid var(--b1)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <span style={{ fontSize: 10, color: "var(--t3)", fontFamily: "var(--m)" }}>
-              {filtered.length} product{filtered.length !== 1 ? "s" : ""} · {progress.done - progress.errors} loaded
-              {progress.errors > 0 && <span style={{ color: "var(--dn)" }}> · {progress.errors} failed</span>}
+          <div style={{ padding: "8px 16px", borderTop: "1px solid var(--b1)", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+            <span style={{ fontSize: 9, color: "var(--t4)", fontFamily: "var(--m)" }}>
+              {sorted.length} products · {loadedCount} loaded
+              {progress.errors > 0 && <span style={{ color: "var(--dn)" }}> · {progress.errors} err</span>}
             </span>
-            <span style={{ fontSize: 10, color: "var(--t3)", fontFamily: "var(--m)" }}>
-              14-day view · 5 concurrent fetches · cached 24h
-            </span>
-          </footer>
+            <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+              <span style={{ fontSize: 8, color: "var(--t4)", fontFamily: "var(--m)" }}>Less</span>
+              {LEVELS.map((c, i) => (
+                <span key={i} style={{ width: 6, height: 6, borderRadius: 1, background: c, display: "inline-block" }} />
+              ))}
+              <span style={{ fontSize: 8, color: "var(--t4)", fontFamily: "var(--m)" }}>More</span>
+            </div>
+          </div>
         </main>
+
+        {/* ─── RIGHT: LIVE FEED SIDEBAR ─── */}
+        <aside className="pulse-sidebar" style={{ width: 260, flexShrink: 0, borderLeft: "1px solid var(--b1)", background: "rgba(10,11,16,.5)", position: "sticky", top: 48, height: "calc(100vh - 84px)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <div style={{ padding: "10px 12px 8px", borderBottom: "1px solid var(--b1)", flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ width: 5, height: 5, borderRadius: "50%", background: "var(--g)", animation: "lp 2s ease-in-out infinite" }} />
+                <span style={{ fontSize: 9, fontWeight: 700, fontFamily: "var(--m)", letterSpacing: ".1em", color: "var(--t3)" }}>LIVE FEED</span>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                {surgingCount > 0 && (
+                  <span style={{ fontSize: 9, fontFamily: "var(--m)", color: "var(--g)", fontWeight: 700 }}>{surgingCount} surging</span>
+                )}
+                <span style={{ fontSize: 9, fontFamily: "var(--m)", color: "var(--t4)" }}>{feedItems.length}</span>
+              </div>
+            </div>
+          </div>
+          <div className="feed-list" style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "6px 8px", display: "flex", flexDirection: "column", gap: 4 }}>
+            {feedItems.length === 0 ? (
+              <div style={{ padding: "32px 0", textAlign: "center" }}>
+                <div style={{ fontSize: 10, color: "var(--t4)", fontFamily: "var(--m)", lineHeight: 1.6 }}>
+                  {progress.done < progress.total ? "Scanning..." : "No momentum signals yet"}
+                </div>
+              </div>
+            ) : feedItems.map((item, i) => (
+              <LiveFeedCard key={item.id} item={item} index={i} />
+            ))}
+          </div>
+        </aside>
       </div>
     </div>
   );
