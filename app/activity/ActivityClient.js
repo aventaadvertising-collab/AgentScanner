@@ -217,92 +217,119 @@ function SignalDots({ signals }) {
   );
 }
 
+// ── Smooth cubic spline helper (monotone) ──
+function splinePath(pts) {
+  if (pts.length < 2) return "";
+  if (pts.length === 2) return `M${pts[0].x},${pts[0].y}L${pts[1].x},${pts[1].y}`;
+  let d = `M${pts[0].x},${pts[0].y}`;
+  for (let i = 0; i < pts.length - 1; i++) {
+    const p0 = pts[Math.max(i - 1, 0)];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[Math.min(i + 2, pts.length - 1)];
+    const tension = 0.35;
+    const cp1x = p1.x + (p2.x - p0.x) * tension;
+    const cp1y = p1.y + (p2.y - p0.y) * tension;
+    const cp2x = p2.x - (p3.x - p1.x) * tension;
+    const cp2y = p2.y - (p3.y - p1.y) * tension;
+    d += `C${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
+  }
+  return d;
+}
+
 // ────────────────────────────────────────────
-// Spectrogram Strip — Asset-style heatmap with highs & lows
-// Variable-height bars + gradient fill + peak/valley indicators
+// SpectrogramStrip — Smooth live sparkline chart
+// Cubic-spline area chart with glow, live dot, hi/lo markers
 // ────────────────────────────────────────────
 function SpectrogramStrip({ days, width = 420, height = 28, showToday = true }) {
   if (!days || !days.length) return null;
   const max = Math.max(...days, 1);
   const avg = days.reduce((s, v) => s + v, 0) / days.length;
   const n = days.length;
-  const cellW = Math.max(Math.floor((width - 4) / n) - 1, 3);
-  const gap = 1;
-  const pad = 2;
-  const barArea = height - pad * 2;
+  const padX = 2, padT = 3, padB = 2;
+  const chartH = height - padT - padB;
+  const stepX = (width - padX * 2) / (n - 1 || 1);
 
-  // Find local peaks and valleys for markers
-  const peaks = new Set();
-  const valleys = new Set();
-  for (let i = 1; i < n - 1; i++) {
-    if (days[i] > days[i - 1] && days[i] >= days[i + 1] && days[i] > avg * 1.3) peaks.add(i);
-    if (days[i] < days[i - 1] && days[i] <= days[i + 1] && days[i] < avg * 0.5 && days[i - 1] > 0) valleys.add(i);
+  // Build point array
+  const pts = days.map((v, i) => ({
+    x: padX + i * stepX,
+    y: padT + chartH - (v / max) * chartH,
+    v,
+  }));
+
+  // Find hi/lo indices
+  let hiIdx = 0, loIdx = 0;
+  for (let i = 1; i < n; i++) {
+    if (days[i] > days[hiIdx]) hiIdx = i;
+    if (days[i] < days[loIdx] && days[i] >= 0) loIdx = i;
   }
 
-  // Build line path connecting bar tops for the area fill
-  const points = days.map((count, i) => {
-    const x = pad + i * (cellW + gap) + cellW / 2;
-    const barH = max > 0 ? Math.max((count / max) * barArea, 1) : 1;
-    const y = height - pad - barH;
-    return `${x},${y}`;
-  });
-  const areaPath = `M${points[0]} ${points.slice(1).map(p => `L${p}`).join(" ")} L${pad + (n - 1) * (cellW + gap) + cellW / 2},${height - pad} L${pad + cellW / 2},${height - pad} Z`;
+  const linePath = splinePath(pts);
+  const areaPath = `${linePath}L${pts[n - 1].x},${padT + chartH}L${pts[0].x},${padT + chartH}Z`;
+  const lastPt = pts[n - 1];
+  const uid = useMemo(() => Math.random().toString(36).slice(2, 8), []);
 
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: "block", borderRadius: 4 }}>
       <defs>
-        <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="rgba(45,212,191,.18)" />
-          <stop offset="100%" stopColor="rgba(45,212,191,.01)" />
+        <linearGradient id={`ag-${uid}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="rgba(45,212,191,.22)" />
+          <stop offset="60%" stopColor="rgba(45,212,191,.06)" />
+          <stop offset="100%" stopColor="rgba(45,212,191,.0)" />
         </linearGradient>
-        <linearGradient id="barGradHot" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="rgba(45,212,191,.9)" />
-          <stop offset="100%" stopColor="rgba(45,212,191,.4)" />
-        </linearGradient>
+        <filter id={`gl-${uid}`} x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="1.5" result="blur" />
+          <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
+        <radialGradient id={`lg-${uid}`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="rgba(45,212,191,.6)" />
+          <stop offset="100%" stopColor="rgba(45,212,191,0)" />
+        </radialGradient>
       </defs>
 
-      {/* Subtle background */}
-      <rect x={0} y={0} width={width} height={height} rx={4} fill="rgba(255,255,255,.015)" />
+      {/* Background */}
+      <rect x={0} y={0} width={width} height={height} rx={4} fill="rgba(255,255,255,.012)" />
 
       {/* Average line */}
       {avg > 0 && (() => {
-        const avgY = height - pad - Math.max((avg / max) * barArea, 1);
-        return <line x1={pad} y1={avgY} x2={width - pad} y2={avgY} stroke="rgba(242,242,247,.06)" strokeWidth={0.5} strokeDasharray="3,3" />;
+        const avgY = padT + chartH - (avg / max) * chartH;
+        return <line x1={padX} y1={avgY} x2={width - padX} y2={avgY} stroke="rgba(242,242,247,.05)" strokeWidth={0.5} strokeDasharray="2,3" />;
       })()}
 
-      {/* Area fill under the line */}
-      <path d={areaPath} fill="url(#areaGrad)" />
+      {/* Area fill */}
+      <path d={areaPath} fill={`url(#ag-${uid})`} />
 
-      {/* Bars with variable height + thermal color */}
-      {days.map((count, i) => {
-        const x = pad + i * (cellW + gap);
-        const barH = max > 0 ? Math.max((count / max) * barArea, 1) : 1;
-        const y = height - pad - barH;
-        const level = getLevel(count, max);
-        const isToday = showToday && i === n - 1;
-        const isPeak = peaks.has(i);
-        const isValley = valleys.has(i);
+      {/* Glow line */}
+      <path d={linePath} fill="none" stroke="rgba(45,212,191,.15)" strokeWidth={3} filter={`url(#gl-${uid})`} />
 
-        // Color based on relative intensity — hotter for higher values
-        const alpha = count > 0 ? 0.2 + (count / max) * 0.7 : 0.04;
-        const barColor = count > 0 ? `rgba(45,212,191,${alpha})` : "rgba(255,255,255,.03)";
+      {/* Main line */}
+      <path d={linePath} fill="none" stroke="rgba(45,212,191,.7)" strokeWidth={1.2} strokeLinecap="round" />
 
-        return (
-          <g key={i}>
-            <rect x={x} y={y} width={cellW} height={barH} rx={1.5} fill={barColor}
-              stroke={isToday ? "rgba(45,212,191,.7)" : "none"} strokeWidth={isToday ? 1 : 0}>
-              {isToday && <animate attributeName="stroke-opacity" values="0.3;1;0.3" dur="2s" repeatCount="indefinite" />}
-            </rect>
-            {/* Peak marker — small dot above */}
-            {isPeak && <circle cx={x + cellW / 2} cy={y - 2} r={1.2} fill="rgba(45,212,191,.7)" />}
-            {/* Valley marker — small dash below */}
-            {isValley && count > 0 && <rect x={x + cellW / 2 - 1.5} y={height - pad + 1} width={3} height={0.5} rx={0.25} fill="rgba(220,38,38,.3)" />}
-          </g>
-        );
-      })}
+      {/* Hi marker */}
+      {days[hiIdx] > avg && (
+        <g>
+          <circle cx={pts[hiIdx].x} cy={pts[hiIdx].y} r={2} fill="none" stroke="rgba(45,212,191,.5)" strokeWidth={0.6} />
+          <circle cx={pts[hiIdx].x} cy={pts[hiIdx].y} r={0.8} fill="rgba(45,212,191,.9)" />
+        </g>
+      )}
 
-      {/* Line connecting tops */}
-      <polyline points={points.join(" ")} fill="none" stroke="rgba(45,212,191,.25)" strokeWidth={0.8} strokeLinejoin="round" />
+      {/* Lo marker */}
+      {days[loIdx] < avg && loIdx !== hiIdx && days[loIdx] > 0 && (
+        <circle cx={pts[loIdx].x} cy={pts[loIdx].y} r={0.8} fill="rgba(220,38,38,.5)" />
+      )}
+
+      {/* Live dot at end */}
+      {showToday && (
+        <g>
+          <circle cx={lastPt.x} cy={lastPt.y} r={5} fill={`url(#lg-${uid})`}>
+            <animate attributeName="r" values="4;7;4" dur="2s" repeatCount="indefinite" />
+            <animate attributeName="opacity" values="0.6;0.2;0.6" dur="2s" repeatCount="indefinite" />
+          </circle>
+          <circle cx={lastPt.x} cy={lastPt.y} r={1.8} fill="#2DD4BF" />
+          {/* Horizontal scan line from live dot */}
+          <line x1={padX} y1={lastPt.y} x2={lastPt.x - 4} y2={lastPt.y} stroke="rgba(45,212,191,.08)" strokeWidth={0.5} strokeDasharray="1,2" />
+        </g>
+      )}
     </svg>
   );
 }
@@ -311,122 +338,138 @@ function MicroStrip({ days, width = 120, height = 14 }) {
   if (!days || !days.length) return null;
   const max = Math.max(...days, 1);
   const last10 = days.slice(-10);
-  const cellW = Math.max(Math.floor((width - 2) / last10.length) - 1, 2);
-  const pad = 1;
-  const barArea = height - pad * 2;
+  const n = last10.length;
+  const pad = 2;
+  const chartH = height - pad * 2;
+  const stepX = (width - pad * 2) / (n - 1 || 1);
+
+  const pts = last10.map((v, i) => ({
+    x: pad + i * stepX,
+    y: pad + chartH - (v / max) * chartH,
+  }));
+
+  const linePath = splinePath(pts);
+  const areaPath = `${linePath}L${pts[n - 1].x},${pad + chartH}L${pts[0].x},${pad + chartH}Z`;
+  const lastPt = pts[n - 1];
+
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: "block", borderRadius: 2 }}>
-      {last10.map((count, i) => {
-        const barH = max > 0 ? Math.max((count / max) * barArea, 0.5) : 0.5;
-        const y = height - pad - barH;
-        const alpha = count > 0 ? 0.15 + (count / max) * 0.7 : 0.03;
-        return (
-          <rect key={i} x={pad + i * (cellW + 1)} y={y} width={cellW} height={barH} rx={1}
-            fill={count > 0 ? `rgba(45,212,191,${alpha})` : "rgba(255,255,255,.03)"} />
-        );
-      })}
+      <defs>
+        <linearGradient id="micro-ag" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="rgba(45,212,191,.15)" />
+          <stop offset="100%" stopColor="rgba(45,212,191,0)" />
+        </linearGradient>
+      </defs>
+      <path d={areaPath} fill="url(#micro-ag)" />
+      <path d={linePath} fill="none" stroke="rgba(45,212,191,.6)" strokeWidth={1} strokeLinecap="round" />
+      <circle cx={lastPt.x} cy={lastPt.y} r={1.2} fill="#2DD4BF" />
     </svg>
   );
 }
 
 // ────────────────────────────────────────────
-// Weekly Pulse Chart — expanded row asset chart
-// 52-week candlestick-style heatmap with volume + range
+// Weekly Pulse Chart — expanded row live area chart
+// 52-week smooth line with volume bars, MA, glow
 // ────────────────────────────────────────────
 function WeeklyPulseChart({ weeks, width = 600, height = 80 }) {
   if (!weeks || weeks.length < 4) return null;
   const n = Math.min(weeks.length, 52);
   const recent = weeks.slice(-n);
   const maxT = Math.max(...recent.map(w => w.t), 1);
-  const cellW = Math.max(Math.floor((width - 8) / n) - 1, 3);
-  const gap = 1;
   const pad = 4;
-  const barArea = height - pad * 2 - 12; // leave room for labels
+  const labelH = 10;
+  const chartH = height - pad * 2 - labelH;
+  const stepX = (width - pad * 2 - 20) / (n - 1 || 1); // 20px left for y-labels
+  const ox = pad + 20; // origin x after labels
 
-  // Weekly stats: total, peak day, low day
-  const weekStats = recent.map(w => {
-    const ds = w.d || [0, 0, 0, 0, 0, 0, 0];
-    const hi = Math.max(...ds);
-    const lo = Math.min(...ds.filter(v => v > 0), hi);
-    return { total: w.t, hi, lo, ts: w.w, days: ds };
-  });
+  const weekTotals = recent.map(w => w.t);
+
+  // Data points for the main line
+  const pts = weekTotals.map((t, i) => ({
+    x: ox + i * stepX,
+    y: pad + chartH - (t / maxT) * chartH,
+    v: t,
+  }));
 
   // 4-week moving average
-  const movingAvg = weekStats.map((_, i) => {
+  const maPts = weekTotals.map((_, i) => {
     const start = Math.max(0, i - 3);
-    const slice = weekStats.slice(start, i + 1);
-    return slice.reduce((s, w) => s + w.total, 0) / slice.length;
+    const slice = weekTotals.slice(start, i + 1);
+    const avg = slice.reduce((s, v) => s + v, 0) / slice.length;
+    return { x: ox + i * stepX, y: pad + chartH - (avg / maxT) * chartH };
   });
 
-  // Build MA line points
-  const maPoints = movingAvg.map((avg, i) => {
-    const x = pad + i * (cellW + gap) + cellW / 2;
-    const y = pad + 10 + barArea - (avg / maxT) * barArea;
-    return `${x},${y}`;
-  });
+  const linePath = splinePath(pts);
+  const areaPath = `${linePath}L${pts[n - 1].x},${pad + chartH}L${pts[0].x},${pad + chartH}Z`;
+  const maLinePath = splinePath(maPts);
+  const lastPt = pts[n - 1];
+  const uid = useMemo(() => "wk" + Math.random().toString(36).slice(2, 8), []);
+
+  // Volume bars (thin, behind the line)
+  const barW = Math.max(stepX * 0.4, 1.5);
 
   return (
-    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: "block", borderRadius: 6, background: "rgba(255,255,255,.01)" }}>
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: "block", borderRadius: 6, background: "rgba(255,255,255,.012)" }}>
       <defs>
-        <linearGradient id="wkAreaGrad" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="rgba(45,212,191,.12)" />
-          <stop offset="100%" stopColor="rgba(45,212,191,.01)" />
+        <linearGradient id={`wag-${uid}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="rgba(45,212,191,.16)" />
+          <stop offset="50%" stopColor="rgba(45,212,191,.04)" />
+          <stop offset="100%" stopColor="rgba(45,212,191,0)" />
         </linearGradient>
+        <filter id={`wgl-${uid}`} x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur stdDeviation="2" result="blur" />
+          <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
+        <radialGradient id={`wlg-${uid}`} cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stopColor="rgba(45,212,191,.7)" />
+          <stop offset="100%" stopColor="rgba(45,212,191,0)" />
+        </radialGradient>
       </defs>
 
       {/* Grid lines */}
       {[0.25, 0.5, 0.75].map(pct => {
-        const y = pad + 10 + barArea - pct * barArea;
-        return <line key={pct} x1={pad} y1={y} x2={width - pad} y2={y} stroke="rgba(255,255,255,.03)" strokeWidth={0.5} />;
+        const y = pad + chartH - pct * chartH;
+        return <line key={pct} x1={ox} y1={y} x2={width - pad} y2={y} stroke="rgba(255,255,255,.03)" strokeWidth={0.5} />;
       })}
 
       {/* Y-axis labels */}
-      <text x={pad} y={pad + 8} fill="var(--t4)" fontSize="6" fontFamily="var(--m)">{maxT}</text>
-      <text x={pad} y={pad + 10 + barArea} fill="var(--t4)" fontSize="6" fontFamily="var(--m)">0</text>
+      <text x={pad} y={pad + 6} fill="var(--t4)" fontSize="6" fontFamily="var(--m)">{maxT}</text>
+      <text x={pad} y={pad + chartH * 0.5 + 2} fill="var(--t4)" fontSize="6" fontFamily="var(--m)">{Math.round(maxT / 2)}</text>
+      <text x={pad} y={pad + chartH} fill="var(--t4)" fontSize="6" fontFamily="var(--m)">0</text>
 
-      {/* Area fill under MA */}
-      {maPoints.length > 1 && (
-        <path d={`M${maPoints[0]} ${maPoints.slice(1).map(p => `L${p}`).join(" ")} L${pad + (n - 1) * (cellW + gap) + cellW / 2},${pad + 10 + barArea} L${pad + cellW / 2},${pad + 10 + barArea} Z`}
-          fill="url(#wkAreaGrad)" />
-      )}
-
-      {/* Candlestick-style bars: body = total height, wicks = hi/lo day range */}
-      {weekStats.map((w, i) => {
-        const x = pad + i * (cellW + gap);
-        const barH = Math.max((w.total / maxT) * barArea, 1);
-        const y = pad + 10 + barArea - barH;
-
-        // Color: intensity based on total
-        const intensity = w.total / maxT;
-        const isRecent = i >= n - 4;
-        const alpha = w.total > 0 ? 0.15 + intensity * 0.65 : 0.02;
-        const barColor = w.total > 0
-          ? isRecent ? `rgba(45,212,191,${alpha + 0.1})` : `rgba(45,212,191,${alpha})`
-          : "rgba(255,255,255,.02)";
-
-        // Wick: shows daily range within the week
-        const wickTop = pad + 10 + barArea - (w.hi / maxT) * barArea * (w.total > 0 ? (w.hi / (w.total || 1)) * n * 0.15 : 0);
-        const wickBot = pad + 10 + barArea;
-
-        return (
-          <g key={i}>
-            {/* Bar body */}
-            <rect x={x} y={y} width={cellW} height={barH} rx={1} fill={barColor} />
-            {/* Highlight last week */}
-            {i === n - 1 && (
-              <rect x={x - 0.5} y={y - 0.5} width={cellW + 1} height={barH + 1} rx={1.5}
-                fill="none" stroke="rgba(45,212,191,.5)" strokeWidth={0.8}>
-                <animate attributeName="stroke-opacity" values="0.3;0.8;0.3" dur="2s" repeatCount="indefinite" />
-              </rect>
-            )}
-          </g>
-        );
+      {/* Volume bars behind */}
+      {weekTotals.map((t, i) => {
+        const barH = Math.max((t / maxT) * chartH, 0.5);
+        const x = ox + i * stepX - barW / 2;
+        const y = pad + chartH - barH;
+        const alpha = t > 0 ? 0.04 + (t / maxT) * 0.08 : 0.01;
+        return <rect key={i} x={x} y={y} width={barW} height={barH} rx={0.5} fill={`rgba(45,212,191,${alpha})`} />;
       })}
 
-      {/* Moving average line */}
-      {maPoints.length > 1 && (
-        <polyline points={maPoints.join(" ")} fill="none" stroke="rgba(45,212,191,.5)" strokeWidth={1} strokeLinejoin="round" />
-      )}
+      {/* Area fill */}
+      <path d={areaPath} fill={`url(#wag-${uid})`} />
+
+      {/* MA line (dimmer, dashed) */}
+      <path d={maLinePath} fill="none" stroke="rgba(242,242,247,.12)" strokeWidth={0.8} strokeDasharray="3,2" strokeLinecap="round" />
+
+      {/* Glow line */}
+      <path d={linePath} fill="none" stroke="rgba(45,212,191,.12)" strokeWidth={4} filter={`url(#wgl-${uid})`} />
+
+      {/* Main line */}
+      <path d={linePath} fill="none" stroke="rgba(45,212,191,.75)" strokeWidth={1.4} strokeLinecap="round" />
+
+      {/* Live dot */}
+      <circle cx={lastPt.x} cy={lastPt.y} r={6} fill={`url(#wlg-${uid})`}>
+        <animate attributeName="r" values="5;8;5" dur="2s" repeatCount="indefinite" />
+        <animate attributeName="opacity" values="0.6;0.25;0.6" dur="2s" repeatCount="indefinite" />
+      </circle>
+      <circle cx={lastPt.x} cy={lastPt.y} r={2.2} fill="#2DD4BF" />
+
+      {/* Horizontal price line from live dot */}
+      <line x1={ox} y1={lastPt.y} x2={lastPt.x - 5} y2={lastPt.y} stroke="rgba(45,212,191,.06)" strokeWidth={0.5} strokeDasharray="1,2" />
+      {/* Value label at live dot */}
+      <rect x={lastPt.x + 4} y={lastPt.y - 5} width={20} height={10} rx={2} fill="rgba(45,212,191,.12)" />
+      <text x={lastPt.x + 6} y={lastPt.y + 2} fill="#2DD4BF" fontSize="6" fontWeight="700" fontFamily="var(--m)">{weekTotals[n - 1]}</text>
 
       {/* Month labels at bottom */}
       {(() => {
@@ -436,12 +479,12 @@ function WeeklyPulseChart({ weeks, width = 600, height = 80 }) {
           const d = new Date(recent[i].w * 1000);
           const m = d.getMonth();
           if (m !== lastMonth) {
-            labels.push({ x: pad + i * (cellW + gap), label: ["J","F","M","A","M","J","J","A","S","O","N","D"][m] });
+            labels.push({ x: ox + i * stepX, label: ["J","F","M","A","M","J","J","A","S","O","N","D"][m] });
             lastMonth = m;
           }
         }
         return labels.map((l, i) => (
-          <text key={i} x={l.x} y={height - 1} fill="var(--t4)" fontSize="5" fontFamily="var(--m)">{l.label}</text>
+          <text key={i} x={l.x} y={height - 1} fill="var(--t4)" fontSize="5.5" fontFamily="var(--m)">{l.label}</text>
         ));
       })()}
     </svg>
@@ -450,7 +493,7 @@ function WeeklyPulseChart({ weeks, width = 600, height = 80 }) {
 
 function ShimmerStrip({ width = 420, height = 28 }) {
   return (
-    <div style={{ width, height, borderRadius: 3, background: "rgba(255,255,255,.02)", overflow: "hidden", position: "relative" }}>
+    <div style={{ width, height, borderRadius: 4, background: "rgba(255,255,255,.012)", overflow: "hidden", position: "relative" }}>
       <div style={{ width: "30%", height: "100%", background: "linear-gradient(90deg, transparent, rgba(45,212,191,.06), transparent)", position: "absolute", animation: "scan 2s ease-in-out infinite" }} />
     </div>
   );
