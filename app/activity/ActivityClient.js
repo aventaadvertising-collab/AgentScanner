@@ -1332,13 +1332,13 @@ export default function ActivityClient() {
           </div>
         </main>
 
-        {/* ─── RIGHT: TRANSACTION FEED ─── */}
+        {/* ─── RIGHT: ACTIVITY FEED ─── */}
         <aside className="pulse-sidebar" style={{ width: 240, flexShrink: 0, borderLeft: "1px solid var(--b1)", background: "rgba(10,11,16,.5)", position: "sticky", top: 42, height: "calc(100vh - 140px)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
           <div style={{ padding: "6px 8px 5px", borderBottom: "1px solid var(--b1)", flexShrink: 0 }}>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
               <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                 <span style={{ width: 4, height: 4, borderRadius: "50%", background: "#00C853", animation: "lp 2s ease-in-out infinite" }} />
-                <span style={{ fontSize: 7, fontWeight: 700, fontFamily: "var(--m)", letterSpacing: ".1em", color: "var(--t3)" }}>TRANSACTIONS</span>
+                <span style={{ fontSize: 7, fontWeight: 700, fontFamily: "var(--m)", letterSpacing: ".1em", color: "var(--t3)" }}>ACTIVITY FEED</span>
               </div>
               <span style={{ fontSize: 7, fontFamily: "var(--m)", color: "var(--t4)" }}>{filteredFeed.length}</span>
             </div>
