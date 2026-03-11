@@ -34,6 +34,14 @@
     {
       "path": "/api/scanner?source=batch3&secret=${PIPELINE_SECRET}",
       "schedule": "* * * * *"
+    },
+    {
+      "path": "/api/scanner?source=batch5&secret=${PIPELINE_SECRET}",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/alerts/evaluate?secret=${PIPELINE_SECRET}",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

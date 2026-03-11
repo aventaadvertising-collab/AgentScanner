@@ -4,6 +4,9 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { getSupabase } from "@/lib/supabase";
 import { useAuth } from "@/lib/AuthContext";
 import { CommitHeatmapLoader } from "@/app/components/CommitHeatmap";
+import { Sparkline, GrowthBadge, VelocityBadge } from "@/app/components/Sparkline";
+import AlertBuilder from "@/app/components/AlertBuilder";
+import CollectionPicker from "@/app/components/CollectionPicker";
 
 // ─── Helpers ───
 function timeAgo(date) {
@@ -35,6 +38,10 @@ function sourceLabel(url) {
   if (url.includes("arxiv.org")) return "Paper";
   if (url.includes("dev.to")) return "Article";
   if (url.includes("lobste.rs")) return "Link";
+  if (url.includes("play.google.com")) return "Android App";
+  if (url.includes("apps.apple.com")) return "iOS App";
+  if (url.includes("chromewebstore.google.com") || url.includes("chrome.google.com/webstore")) return "Extension";
+  if (url.includes("x.com") || url.includes("twitter.com")) return "Tweet";
   return "Source";
 }
 
@@ -121,6 +128,21 @@ export default function ScreenerClient() {
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [totalCount, setTotalCount] = useState(null);
+
+  // ── Inline Analytics ──
+  const [analyticsMap, setAnalyticsMap] = useState({});
+
+  // ── Alerts + Collections + Notifications ──
+  const [showAlertBuilder, setShowAlertBuilder] = useState(false);
+  const [editingAlert, setEditingAlert] = useState(null);
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [showNotifPanel, setShowNotifPanel] = useState(false);
+  const notifRef = useRef(null);
+  const [collPickerTarget, setCollPickerTarget] = useState(null); // { discoveryId, rect }
+  const [userCollections, setUserCollections] = useState([]);
+  const [activeCollectionId, setActiveCollectionId] = useState(null); // null = all saved
+  const [collectionItemIds, setCollectionItemIds] = useState(null); // Set of discovery IDs in active collection
 
   // ── Auth + Bookmarks ──
   const { user } = useAuth();
@@ -308,6 +330,103 @@ export default function ScreenerClient() {
     return () => document.removeEventListener("mousedown", onClick);
   }, [showExport]);
 
+  // ── Fetch batch analytics for visible discoveries ──
+  useEffect(() => {
+    if (discoveries.length === 0) return;
+    const ids = discoveries.slice(0, 50).map((d) => d.id).filter(Boolean).join(",");
+    if (!ids) return;
+    fetch(`/api/discovery-analytics?ids=${ids}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (d?.analytics) setAnalyticsMap(d.analytics);
+      })
+      .catch(() => {});
+  }, [discoveries.length]);
+
+  // ── Fetch notifications when logged in ──
+  useEffect(() => {
+    if (!user) { setNotifications([]); setUnreadCount(0); return; }
+    const fetchNotifs = () => {
+      fetch(`/api/alerts/notifications?user_id=${user.id}`)
+        .then((r) => r.json())
+        .then((d) => {
+          if (d.notifications) setNotifications(d.notifications);
+          if (d.unread != null) setUnreadCount(d.unread);
+        })
+        .catch(() => {});
+    };
+    fetchNotifs();
+    const i = setInterval(fetchNotifs, 60_000);
+    return () => clearInterval(i);
+  }, [user]);
+
+  // ── Fetch collections when logged in ──
+  useEffect(() => {
+    if (!user) { setUserCollections([]); return; }
+    fetch(`/api/collections?user_id=${user.id}`)
+      .then((r) => r.json())
+      .then((d) => { if (d.collections) setUserCollections(d.collections); })
+      .catch(() => {});
+  }, [user]);
+
+  // ── Fetch collection items when a specific collection is active ──
+  useEffect(() => {
+    if (!activeCollectionId) { setCollectionItemIds(null); return; }
+    fetch(`/api/collections/items?collection_id=${activeCollectionId}`)
+      .then((r) => r.json())
+      .then((d) => {
+        const ids = new Set((d.items || []).map((i) => i.discovery_id));
+        setCollectionItemIds(ids);
+      })
+      .catch(() => setCollectionItemIds(new Set()));
+  }, [activeCollectionId]);
+
+  // ── Close notification panel on outside click ──
+  useEffect(() => {
+    if (!showNotifPanel) return;
+    const onClick = (e) => { if (notifRef.current && !notifRef.current.contains(e.target)) setShowNotifPanel(false); };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [showNotifPanel]);
+
+  // ── Alert save handler ──
+  const handleAlertSave = useCallback(async (alertData) => {
+    if (!user) throw new Error("Sign in to create alerts");
+    const isEdit = !!alertData.id;
+    const res = await fetch("/api/alerts", {
+      method: isEdit ? "PATCH" : "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...alertData, user_id: user.id }),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || "Failed to save alert");
+    }
+  }, [user]);
+
+  // ── Mark notification read ──
+  const markNotifRead = useCallback(async (notifId) => {
+    if (!user) return;
+    setNotifications((prev) => prev.map((n) => n.id === notifId ? { ...n, read: true } : n));
+    setUnreadCount((prev) => Math.max(0, prev - 1));
+    fetch("/api/alerts/notifications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: user.id, id: notifId }),
+    }).catch(() => {});
+  }, [user]);
+
+  const markAllRead = useCallback(async () => {
+    if (!user) return;
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    setUnreadCount(0);
+    fetch("/api/alerts/notifications", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: user.id, mark_all: true }),
+    }).catch(() => {});
+  }, [user]);
+
   // ── Load more (pagination) ──
   const loadMore = useCallback(async () => {
     if (loadingMore) return;
@@ -364,7 +483,13 @@ export default function ScreenerClient() {
 
   const filtered = useMemo(() => {
     let items = allItems;
-    if (showSaved) items = items.filter((d) => savedSet.has(d.id));
+    if (showSaved) {
+      if (activeCollectionId && collectionItemIds) {
+        items = items.filter((d) => collectionItemIds.has(d.id));
+      } else {
+        items = items.filter((d) => savedSet.has(d.id));
+      }
+    }
     if (catFilter !== "All") items = items.filter((d) => d.category === catFilter);
     if (q) { const lq = q.toLowerCase(); items = items.filter((d) => d.name?.toLowerCase().includes(lq) || d.description?.toLowerCase().includes(lq) || d.category?.toLowerCase().includes(lq) || d.author?.toLowerCase().includes(lq)); }
     return items;
@@ -468,6 +593,40 @@ export default function ScreenerClient() {
           </button>
           <a href="/activity" className="link-hover dash-link" style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid var(--b1)", color: "var(--t2)", fontSize: 12, fontWeight: 600 }}>Activity</a>
           <a href="/dashboard" className="link-hover dash-link" style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid var(--b1)", color: "var(--t2)", fontSize: 12, fontWeight: 600 }}>Dashboard</a>
+          {/* Notification bell */}
+          {user && (
+            <div ref={notifRef} style={{ position: "relative" }}>
+              <button className="ghost-btn" onClick={() => setShowNotifPanel(!showNotifPanel)} style={{ padding: "6px 10px", borderRadius: 6, color: "var(--t2)", fontSize: 15, position: "relative", display: "flex", alignItems: "center" }}>
+                <span role="img" aria-label="notifications">&#x1F514;</span>
+                {unreadCount > 0 && (
+                  <span style={{ position: "absolute", top: 2, right: 4, minWidth: 14, height: 14, borderRadius: 7, background: "#EF4444", color: "#fff", fontSize: 9, fontWeight: 800, display: "flex", alignItems: "center", justifyContent: "center", padding: "0 3px", fontFamily: "var(--m)" }}>
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </button>
+              {showNotifPanel && (
+                <div style={{ position: "absolute", top: "calc(100% + 6px)", right: 0, width: 340, maxHeight: 400, background: "#12141C", border: "1px solid rgba(255,255,255,.1)", borderRadius: 10, boxShadow: "0 12px 40px rgba(0,0,0,.5)", zIndex: 200, animation: "fi .15s ease", overflowY: "auto" }}>
+                  <div style={{ padding: "12px 16px 8px", borderBottom: "1px solid rgba(255,255,255,.04)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 12, fontWeight: 700, fontFamily: "var(--m)", color: "var(--t1)" }}>Notifications</span>
+                    {unreadCount > 0 && (
+                      <button onClick={markAllRead} style={{ background: "none", border: "none", color: "var(--g)", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "var(--m)" }}>Mark all read</button>
+                    )}
+                  </div>
+                  {notifications.length === 0 ? (
+                    <div style={{ padding: "24px 16px", textAlign: "center", fontSize: 12, color: "var(--t3)" }}>No notifications yet. Create alerts to get notified.</div>
+                  ) : (
+                    notifications.slice(0, 20).map((n) => (
+                      <div key={n.id} onClick={() => { markNotifRead(n.id); if (n.discovery_id) { const item = allItems.find((d) => d.id === n.discovery_id); if (item) setSelectedItem(item); } setShowNotifPanel(false); }} style={{ padding: "10px 16px", borderBottom: "1px solid rgba(255,255,255,.02)", cursor: "pointer", background: n.read ? "transparent" : "rgba(45,212,191,.02)", transition: "background .12s" }} onMouseEnter={(e) => e.currentTarget.style.background = "rgba(255,255,255,.02)"} onMouseLeave={(e) => e.currentTarget.style.background = n.read ? "transparent" : "rgba(45,212,191,.02)"}>
+                        <div style={{ fontSize: 12, fontWeight: n.read ? 500 : 700, color: n.read ? "var(--t2)" : "var(--t1)", marginBottom: 2 }}>{n.title}</div>
+                        <div style={{ fontSize: 11, color: "var(--t3)" }}>{n.body}</div>
+                        <div style={{ fontSize: 10, color: "var(--t3)", marginTop: 4, fontFamily: "var(--m)" }}>{n.created_at ? timeAgo(n.created_at) : ""}</div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
+            </div>
+          )}
           {user ? (
             <div style={{ width: 28, height: 28, borderRadius: "50%", background: "linear-gradient(135deg, #2DD4BF, #A78BFA)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#0A0B10", cursor: "default", flexShrink: 0 }} title={user.email}>
               {(user.user_metadata?.full_name?.[0] || user.email?.[0] || "U").toUpperCase()}
@@ -506,11 +665,17 @@ export default function ScreenerClient() {
       {/* ─── TOOLBAR ─── */}
       <div className="screener-toolbar" style={{ padding: "0 32px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, position: "relative", zIndex: 1 }}>
         <div className="screener-pills" style={{ display: "flex", gap: 6, alignItems: "center", overflowX: "auto", maxWidth: "65%", paddingBottom: 2 }}>
-          <button className={`pill${showSaved ? " on" : ""}`} onClick={() => { setShowSaved(!showSaved); if (!showSaved) setCatFilter("All"); }} style={{ padding: "6px 14px", borderRadius: 4, border: showSaved ? "1px solid rgba(255,255,255,.12)" : "1px solid var(--b1)", background: showSaved ? "rgba(45,212,191,.04)" : "transparent", fontSize: 12, fontWeight: 700, fontFamily: "var(--m)", color: showSaved ? "var(--g)" : "var(--t2)", whiteSpace: "nowrap" }}>
+          <button className={`pill${showSaved && !activeCollectionId ? " on" : ""}`} onClick={() => { setActiveCollectionId(null); setShowSaved(!showSaved || !!activeCollectionId); if (!showSaved) setCatFilter("All"); }} style={{ padding: "6px 14px", borderRadius: 4, border: (showSaved && !activeCollectionId) ? "1px solid rgba(255,255,255,.12)" : "1px solid var(--b1)", background: (showSaved && !activeCollectionId) ? "rgba(45,212,191,.04)" : "transparent", fontSize: 12, fontWeight: 700, fontFamily: "var(--m)", color: (showSaved && !activeCollectionId) ? "var(--g)" : "var(--t2)", whiteSpace: "nowrap" }}>
             ★ Saved
             {savedCount > 0 && <span style={{ marginLeft: 5, fontSize: 10, opacity: 0.5, fontFamily: "var(--m)" }}>{savedCount}</span>}
           </button>
-          <button className={`pill${catFilter === "All" && !showSaved ? " on" : ""}`} onClick={() => { setCatFilter("All"); setShowSaved(false); }} style={{ padding: "6px 14px", borderRadius: 4, border: "1px solid var(--b1)", fontSize: 12, fontWeight: 600, fontFamily: "var(--m)", color: "var(--t2)", whiteSpace: "nowrap", background: "transparent" }}>All</button>
+          {user && userCollections.map((col) => (
+            <button key={col.id} className={`pill${activeCollectionId === col.id ? " on" : ""}`} onClick={() => { setActiveCollectionId(activeCollectionId === col.id ? null : col.id); setShowSaved(true); setCatFilter("All"); }} style={{ padding: "6px 14px", borderRadius: 4, border: activeCollectionId === col.id ? "1px solid rgba(255,255,255,.12)" : "1px solid var(--b1)", background: activeCollectionId === col.id ? "rgba(45,212,191,.04)" : "transparent", fontSize: 12, fontWeight: 600, fontFamily: "var(--m)", color: activeCollectionId === col.id ? "var(--g)" : "var(--t2)", whiteSpace: "nowrap" }}>
+              {col.icon} {col.name}
+              {col.item_count > 0 && <span style={{ marginLeft: 5, fontSize: 10, opacity: 0.5, fontFamily: "var(--m)" }}>{col.item_count}</span>}
+            </button>
+          ))}
+          <button className={`pill${catFilter === "All" && !showSaved ? " on" : ""}`} onClick={() => { setCatFilter("All"); setShowSaved(false); setActiveCollectionId(null); }} style={{ padding: "6px 14px", borderRadius: 4, border: "1px solid var(--b1)", fontSize: 12, fontWeight: 600, fontFamily: "var(--m)", color: "var(--t2)", whiteSpace: "nowrap", background: "transparent" }}>All</button>
           {topCats.map((cat) => (
             <button key={cat} className={`pill${catFilter === cat ? " on" : ""}`} onClick={() => setCatFilter(catFilter === cat ? "All" : cat)} style={{ padding: "6px 14px", borderRadius: 4, border: "1px solid var(--b1)", fontSize: 12, fontWeight: 600, fontFamily: "var(--m)", color: "var(--t2)", whiteSpace: "nowrap", background: "transparent" }}>
               {cat}
@@ -539,6 +704,11 @@ export default function ScreenerClient() {
               </div>
             )}
           </div>
+          {user && (
+            <button className="ghost-btn" onClick={() => { setEditingAlert(null); setShowAlertBuilder(true); }} style={{ padding: "8px 12px", borderRadius: 6, color: "var(--g)", fontSize: 12, fontWeight: 700, fontFamily: "var(--m)", display: "flex", alignItems: "center", gap: 5, border: "1px solid rgba(45,212,191,.15)" }}>
+              + Alert
+            </button>
+          )}
           <div style={{ display: "flex", borderRadius: 4, border: "1px solid var(--b1)", overflow: "hidden" }}>
             {["feed", "grid"].map((v) => (
               <button key={v} onClick={() => setView(v)} style={{ padding: "6px 10px", border: "none", background: view === v ? "rgba(255,255,255,.06)" : "transparent", color: view === v ? "var(--t1)" : "var(--t3)", fontSize: 12, cursor: "pointer", transition: "all .12s", fontFamily: "var(--m)" }}>{v === "feed" ? "☰" : "⊞"}</button>
@@ -581,11 +751,11 @@ export default function ScreenerClient() {
           <EmptyState />
         ) : view === "feed" ? (
           <div style={{ maxWidth: 900, margin: "0 auto" }}>
-            {filtered.map((d, i) => <FeedCard key={d.id || d.external_id} item={d} index={i} onSelect={setSelectedItem} voted={savedSet.has(d.id)} onVote={handleVote} />)}
+            {filtered.map((d, i) => <FeedCard key={d.id || d.external_id} item={d} index={i} onSelect={setSelectedItem} voted={savedSet.has(d.id)} onVote={handleVote} analytics={analyticsMap[d.id]} user={user} onCollectionPick={(rect) => setCollPickerTarget({ discoveryId: d.id, rect })} />)}
           </div>
         ) : (
           <div className="screener-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 12 }}>
-            {filtered.map((d, i) => <GridCard key={d.id || d.external_id} item={d} index={i} onSelect={setSelectedItem} voted={savedSet.has(d.id)} onVote={handleVote} />)}
+            {filtered.map((d, i) => <GridCard key={d.id || d.external_id} item={d} index={i} onSelect={setSelectedItem} voted={savedSet.has(d.id)} onVote={handleVote} analytics={analyticsMap[d.id]} user={user} onCollectionPick={(rect) => setCollPickerTarget({ discoveryId: d.id, rect })} />)}
           </div>
         )}
 
@@ -608,13 +778,35 @@ export default function ScreenerClient() {
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <span style={{ fontSize: 10, color: "var(--t3)", fontFamily: "var(--m)", letterSpacing: ".06em" }}>AGENTSCREENER v1.0</span>
           <div style={{ width: 3, height: 3, borderRadius: "50%", background: "var(--t3)" }} />
-          <span style={{ fontSize: 10, color: "var(--t3)" }}>11 intelligence sources</span>
+          <span style={{ fontSize: 10, color: "var(--t3)" }}>21 intelligence sources</span>
         </div>
         <span style={{ fontSize: 10, color: "var(--t3)", fontStyle: "italic" }}>Real-time AI ecosystem intelligence</span>
       </footer>
 
       {/* ─── DETAIL PANEL ─── */}
-      {selectedItem && <DetailPanel item={selectedItem} onClose={() => setSelectedItem(null)} voted={savedSet.has(selectedItem.id)} onVote={handleVote} />}
+      {selectedItem && <DetailPanel item={selectedItem} onClose={() => setSelectedItem(null)} voted={savedSet.has(selectedItem.id)} onVote={handleVote} user={user} onCollectionPick={(rect) => setCollPickerTarget({ discoveryId: selectedItem.id, rect })} onCreateAlert={() => { setEditingAlert(null); setShowAlertBuilder(true); }} />}
+
+      {/* ─── ALERT BUILDER MODAL ─── */}
+      {showAlertBuilder && (
+        <AlertBuilder
+          onClose={() => { setShowAlertBuilder(false); setEditingAlert(null); }}
+          onSave={handleAlertSave}
+          editAlert={editingAlert}
+        />
+      )}
+
+      {/* ─── COLLECTION PICKER (floating) ─── */}
+      {collPickerTarget && user && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 150 }} onClick={() => setCollPickerTarget(null)}>
+          <div style={{ position: "absolute", top: collPickerTarget.rect?.top || 200, left: collPickerTarget.rect?.left || 200 }} onClick={(e) => e.stopPropagation()}>
+            <CollectionPicker
+              userId={user.id}
+              discoveryId={collPickerTarget.discoveryId}
+              onClose={() => setCollPickerTarget(null)}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -653,7 +845,7 @@ function UpvoteButton({ item, voted, onVote, size = "sm" }) {
 }
 
 // ─── Feed Card (list view) ───
-function FeedCard({ item, index, onSelect, voted, onVote }) {
+function FeedCard({ item, index, onSelect, voted, onVote, analytics, user, onCollectionPick }) {
   const age = item.discovered_at ? timeAgo(item.discovered_at) : "—";
   const isVeryNew = item.discovered_at && (Date.now() - new Date(item.discovered_at).getTime()) < 120_000;
   const isNew = item.discovered_at && (Date.now() - new Date(item.discovered_at).getTime()) < 600_000;
@@ -701,15 +893,30 @@ function FeedCard({ item, index, onSelect, voted, onVote }) {
             )}
             {item.stars > 0 && <span style={{ fontSize: 11, fontWeight: 600, color: "var(--t3)", fontFamily: "var(--m)" }}>★ {fmtN(item.stars)}</span>}
             {item.downloads > 0 && <span style={{ fontSize: 11, fontWeight: 600, color: "var(--t3)", fontFamily: "var(--m)" }}>↓ {fmtN(item.downloads)}</span>}
+            {/* Inline analytics */}
+            {analytics?.sparkline?.length > 1 && (
+              <Sparkline data={analytics.sparkline} width={56} height={16} color="auto" showDot={true} />
+            )}
+            {analytics?.growth?.stars_pct_7d != null && Math.abs(analytics.growth.stars_pct_7d) >= 0.5 && (
+              <GrowthBadge pct={analytics.growth.stars_pct_7d} />
+            )}
+            {analytics?.velocity?.stars_24h > 0 && (
+              <VelocityBadge delta={analytics.velocity.stars_24h} icon="★" />
+            )}
             <span style={{ fontSize: 11, color: "var(--t3)" }}>·</span>
             {item.url && <a href={item.url} target="_blank" rel="noopener noreferrer" className="link-hover" onClick={(e) => e.stopPropagation()} style={{ fontSize: 11, fontWeight: 500, color: "var(--t3)" }}>{sourceLabel(item.url)} ↗</a>}
           </div>
         </div>
 
-        {/* Right column: upvote + time */}
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8, flexShrink: 0 }}>
+        {/* Right column: upvote + time + collection */}
+        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6, flexShrink: 0 }}>
           <UpvoteButton item={item} voted={voted} onVote={onVote} />
           <div style={{ fontSize: 11, fontWeight: 600, color: isNew ? "#2DD4BF" : "var(--t3)", fontFamily: "var(--m)" }}>{age}</div>
+          {user && (
+            <button className="ghost-btn" onClick={(e) => { e.stopPropagation(); const rect = e.currentTarget.getBoundingClientRect(); onCollectionPick?.({ top: rect.bottom + 4, left: rect.left - 200 }); }} style={{ padding: "3px 8px", borderRadius: 4, color: "var(--t3)", fontSize: 10, fontWeight: 600, fontFamily: "var(--m)", border: "1px solid rgba(255,255,255,.06)" }} title="Add to collection">
+              + List
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -717,7 +924,7 @@ function FeedCard({ item, index, onSelect, voted, onVote }) {
 }
 
 // ─── Grid Card ───
-function GridCard({ item, index, onSelect, voted, onVote }) {
+function GridCard({ item, index, onSelect, voted, onVote, analytics, user, onCollectionPick }) {
   const isVeryNew = item.discovered_at && (Date.now() - new Date(item.discovered_at).getTime()) < 120_000;
   const isNew = item.discovered_at && (Date.now() - new Date(item.discovered_at).getTime()) < 600_000;
 
@@ -765,6 +972,21 @@ function GridCard({ item, index, onSelect, voted, onVote }) {
         )}
       </div>
 
+      {/* Analytics row */}
+      {analytics?.sparkline?.length > 1 && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14, padding: "6px 14px", borderRadius: 6, background: "rgba(255,255,255,.015)" }}>
+          <Sparkline data={analytics.sparkline} width={100} height={22} color="auto" showArea={true} />
+          <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+            {analytics.growth?.stars_pct_7d != null && Math.abs(analytics.growth.stars_pct_7d) >= 0.5 && (
+              <GrowthBadge pct={analytics.growth.stars_pct_7d} />
+            )}
+            {analytics.velocity?.stars_24h > 0 && (
+              <VelocityBadge delta={analytics.velocity.stars_24h} icon="★" />
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Footer */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
@@ -772,6 +994,11 @@ function GridCard({ item, index, onSelect, voted, onVote }) {
           <UpvoteButton item={item} voted={voted} onVote={onVote} />
         </div>
         <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          {user && (
+            <button className="ghost-btn" onClick={(e) => { e.stopPropagation(); const rect = e.currentTarget.getBoundingClientRect(); onCollectionPick?.({ top: rect.bottom + 4, left: rect.left }); }} style={{ padding: "3px 8px", borderRadius: 4, color: "var(--t3)", fontSize: 10, fontWeight: 600, fontFamily: "var(--m)", border: "1px solid rgba(255,255,255,.06)" }} title="Add to collection">
+              + List
+            </button>
+          )}
           {item.url && <a href={item.url} target="_blank" rel="noopener noreferrer" className="link-hover" onClick={(e) => e.stopPropagation()} style={{ fontSize: 10, fontWeight: 600, color: "var(--t3)", padding: "3px 8px", borderRadius: 4, border: "1px solid rgba(255,255,255,.06)" }}>{sourceLabel(item.url)} ↗</a>}
           {item.author_url && <a href={item.author_url} target="_blank" rel="noopener noreferrer" className="link-hover" onClick={(e) => e.stopPropagation()} style={{ fontSize: 10, fontWeight: 600, color: "var(--t3)", padding: "3px 8px", borderRadius: 4, border: "1px solid rgba(255,255,255,.06)" }}>Profile</a>}
         </div>
@@ -781,7 +1008,7 @@ function GridCard({ item, index, onSelect, voted, onVote }) {
 }
 
 // ─── Detail Panel (slide-out from right) ───
-function DetailPanel({ item, onClose, voted, onVote }) {
+function DetailPanel({ item, onClose, voted, onVote, user, onCollectionPick, onCreateAlert }) {
   if (!item) return null;
 
   const repoPath = extractRepoPath(item);
@@ -919,7 +1146,7 @@ function DetailPanel({ item, onClose, voted, onVote }) {
         </div>
 
         {/* Action buttons */}
-        <div style={{ padding: "20px 24px", display: "flex", gap: 10, alignItems: "center" }}>
+        <div style={{ padding: "20px 24px", display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <UpvoteButton item={item} voted={voted} onVote={onVote} size="lg" />
           <a href={item.url} target="_blank" rel="noopener noreferrer" style={{ flex: 1, padding: "12px 0", borderRadius: 6, background: "#2DD4BF", color: "#0A0B10", fontSize: 13, fontWeight: 800, textDecoration: "none", textAlign: "center", display: "block", transition: "opacity .15s", fontFamily: "var(--m)", letterSpacing: ".02em" }}>
             Open Product →
@@ -930,6 +1157,17 @@ function DetailPanel({ item, onClose, voted, onVote }) {
             </a>
           )}
         </div>
+        {/* Collection & Alert actions */}
+        {user && (
+          <div style={{ padding: "0 24px 20px", display: "flex", gap: 10 }}>
+            <button onClick={(e) => { e.stopPropagation(); const rect = e.currentTarget.getBoundingClientRect(); onCollectionPick?.({ top: rect.bottom + 4, left: rect.left }); }} style={{ flex: 1, padding: "10px 0", borderRadius: 6, border: "1px solid rgba(255,255,255,.08)", background: "rgba(255,255,255,.02)", color: "rgba(242,242,247,.65)", fontSize: 12, fontWeight: 600, fontFamily: "var(--m)", cursor: "pointer", transition: "all .15s" }}>
+              + Add to Collection
+            </button>
+            <button onClick={() => onCreateAlert?.()} style={{ flex: 1, padding: "10px 0", borderRadius: 6, border: "1px solid rgba(45,212,191,.15)", background: "rgba(45,212,191,.02)", color: "#2DD4BF", fontSize: 12, fontWeight: 600, fontFamily: "var(--m)", cursor: "pointer", transition: "all .15s" }}>
+              + Create Alert
+            </button>
+          </div>
+        )}
       </div>
     </>
   );
