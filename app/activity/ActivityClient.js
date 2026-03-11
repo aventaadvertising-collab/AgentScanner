@@ -210,6 +210,15 @@ function matchDiscovery(d, idx) {
 }
 
 // ── Composite pulse score ──
+// Returns a 0-100 score with tier label for human readability
+
+function getPulseTier(score) {
+  if (score >= 70) return { label: "Hot", color: "#00C853", bg: "rgba(0,200,83,.08)", icon: "🔥" };
+  if (score >= 40) return { label: "Active", color: "#2DD4BF", bg: "rgba(45,212,191,.06)", icon: "📈" };
+  if (score >= 15) return { label: "Warm", color: "var(--t2)", bg: "rgba(255,255,255,.03)", icon: "" };
+  if (score > 0) return { label: "Quiet", color: "var(--t4)", bg: "transparent", icon: "" };
+  return { label: "–", color: "var(--t4)", bg: "transparent", icon: "" };
+}
 
 function computePulseScore(commitMomentum, signals) {
   const commitScore = Math.min((commitMomentum === 999 ? 5 : commitMomentum) / 5, 1);
@@ -228,8 +237,10 @@ function computePulseScore(commitMomentum, signals) {
   const active = [commitMomentum > 0, hnUp > 0, phUp > 0, rdCount > 0, ghStars > 0, dl > 0].filter(Boolean).length;
   const breadth = 1 + (active - 1) * 0.1;
 
+  const pulse = Math.round(Math.min(raw * breadth, 1) * 100);
+
   return {
-    pulse: Math.min(raw * breadth, 1),
+    pulse,
     active,
     hn: hnUp, ph: phUp, rd: rdCount, gh: ghStars, dl,
   };
@@ -644,8 +655,9 @@ function ProductRow({ product, data, rank, expanded, onToggle, signals, pulseDat
 
   const pulse = pulseData?.pulse || 0;
   const sigCount = pulseData?.active || 0;
-  const isSurging = pulse > 0.5 || momentum > 2;
-  const isHot = pulse > 0.3 || momentum > 1.5;
+  const tier = getPulseTier(pulse);
+  const isSurging = pulse >= 50 || momentum > 2;
+  const isHot = pulse >= 30 || momentum > 1.5;
 
   const trendDir = trend?.dir || "up";
 
@@ -707,10 +719,9 @@ function ProductRow({ product, data, rank, expanded, onToggle, signals, pulseDat
             <span style={{
               fontSize: 10, fontWeight: 700, fontFamily: "var(--m)",
               padding: "1px 4px", borderRadius: 3,
-              color: pulse > 0.5 ? "#00C853" : pulse > 0.2 ? "var(--t1)" : "var(--t3)",
-              background: pulse > 0.5 ? "rgba(0,200,83,.06)" : pulse > 0.2 ? "rgba(255,255,255,.03)" : "transparent",
+              color: tier.color, background: tier.bg,
             }}>
-              {pulse.toFixed(2)}
+              {tier.icon ? `${tier.icon}` : ""}{pulse}
             </span>
           ) : (
             <span style={{ fontSize: 10, fontFamily: "var(--m)", color: "var(--t4)" }}>{status === "loaded" ? "0" : "\u2013"}</span>
@@ -765,7 +776,7 @@ function ProductRow({ product, data, rank, expanded, onToggle, signals, pulseDat
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
               <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--t4)", fontFamily: "var(--m)" }}>Pulse</span>
-              <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: pulse > 0.3 ? "#00C853" : "var(--t1)" }}>{pulse.toFixed(2)} ({sigCount}s)</span>
+              <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: tier.color }}>{tier.icon ? `${tier.icon} ` : ""}{pulse} · {tier.label}</span>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
               <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--t4)", fontFamily: "var(--m)" }}>1D / 1W / 4W</span>
