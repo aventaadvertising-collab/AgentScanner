@@ -45,6 +45,38 @@ function sourceLabel(url) {
   return "Source";
 }
 
+function sourceType(item) {
+  const src = item.source || "";
+  const url = item.url || "";
+  if (src.startsWith("github") || url.includes("github.com")) return "github";
+  if (src === "huggingface" || url.includes("huggingface.co")) return "huggingface";
+  if (src === "npm" || url.includes("npmjs.com")) return "npm";
+  if (src === "pypi" || url.includes("pypi.org")) return "pypi";
+  if (src === "producthunt" || url.includes("producthunt.com")) return "producthunt";
+  if (src === "hackernews" || url.includes("ycombinator.com")) return "hackernews";
+  if (src === "reddit" || url.includes("reddit.com")) return "reddit";
+  return "other";
+}
+
+const SOURCE_FILTERS = [
+  { value: "all", label: "All Sources" },
+  { value: "github", label: "GitHub" },
+  { value: "huggingface", label: "HuggingFace" },
+  { value: "npm", label: "npm" },
+  { value: "pypi", label: "PyPI" },
+  { value: "producthunt", label: "ProductHunt" },
+  { value: "hackernews", label: "HN" },
+  { value: "reddit", label: "Reddit" },
+  { value: "other", label: "Other" },
+];
+
+const SORT_OPTIONS = [
+  { value: "new", label: "New", icon: "⏱" },
+  { value: "hot", label: "Hot", icon: "🔥" },
+  { value: "stars", label: "★ Stars", icon: "★" },
+  { value: "downloads", label: "↓ Downloads", icon: "↓" },
+];
+
 function formatName(rawName) {
   if (!rawName) return "";
   let clean = rawName.replace(/^@[\w.-]+\//, "");
@@ -106,6 +138,8 @@ export default function ScreenerClient() {
   const [discoveries, setDiscoveries] = useState([]);
   const [stats, setStats] = useState({ today: 0, this_hour: 0 });
   const [catFilter, setCatFilter] = useState("All");
+  const [sortBy, setSortBy] = useState("new"); // new | hot | stars | downloads
+  const [sourceFilter, setSourceFilter] = useState("all"); // all | github | huggingface | npm | pypi | producthunt | other
   const [q, setQ] = useState("");
   const [, setTick] = useState(0);
   const [refreshing, setRefreshing] = useState(false);
@@ -481,8 +515,20 @@ export default function ScreenerClient() {
   const savedSet = user ? userBookmarks : userVotes;
   const savedCount = savedSet.size;
 
+  // ── Source counts for source filter badges ──
+  const sourceCounts = useMemo(() => {
+    const c = {};
+    for (const d of allItems) {
+      const st = sourceType(d);
+      c[st] = (c[st] || 0) + 1;
+    }
+    return c;
+  }, [allItems]);
+
   const filtered = useMemo(() => {
     let items = allItems;
+
+    // Saved / Collection filter
     if (showSaved) {
       if (activeCollectionId && collectionItemIds) {
         items = items.filter((d) => collectionItemIds.has(d.id));
@@ -490,10 +536,48 @@ export default function ScreenerClient() {
         items = items.filter((d) => savedSet.has(d.id));
       }
     }
+
+    // Category filter
     if (catFilter !== "All") items = items.filter((d) => d.category === catFilter);
+
+    // Source filter
+    if (sourceFilter !== "all") items = items.filter((d) => sourceType(d) === sourceFilter);
+
+    // Search filter
     if (q) { const lq = q.toLowerCase(); items = items.filter((d) => d.name?.toLowerCase().includes(lq) || d.description?.toLowerCase().includes(lq) || d.category?.toLowerCase().includes(lq) || d.author?.toLowerCase().includes(lq)); }
+
+    // Duplicate grouping: keep highest-engagement version of items sharing the same name+author
+    const grouped = new Map();
+    for (const item of items) {
+      const key = (item.name || "").toLowerCase().replace(/[-_\s]+/g, "") + "|" + (item.author || "").toLowerCase();
+      const existing = grouped.get(key);
+      if (!existing) {
+        grouped.set(key, item);
+      } else {
+        // Keep the one with more engagement (stars + downloads + upvotes)
+        const existingScore = (existing.stars || 0) + (existing.downloads || 0) + (existing.upvotes || 0);
+        const newScore = (item.stars || 0) + (item.downloads || 0) + (item.upvotes || 0);
+        if (newScore > existingScore) grouped.set(key, item);
+      }
+    }
+    items = [...grouped.values()];
+
+    // Sort
+    if (sortBy === "hot") {
+      items.sort((a, b) => {
+        const scoreA = (a.upvotes || 0) * 3 + (a.stars || 0) + (a.downloads || 0) * 0.01;
+        const scoreB = (b.upvotes || 0) * 3 + (b.stars || 0) + (b.downloads || 0) * 0.01;
+        return scoreB - scoreA;
+      });
+    } else if (sortBy === "stars") {
+      items.sort((a, b) => (b.stars || 0) - (a.stars || 0));
+    } else if (sortBy === "downloads") {
+      items.sort((a, b) => (b.downloads || 0) - (a.downloads || 0));
+    }
+    // "new" sort is the default (already sorted by discovered_at in allItems)
+
     return items;
-  }, [allItems, catFilter, q, showSaved, savedSet]);
+  }, [allItems, catFilter, sourceFilter, sortBy, q, showSaved, savedSet, activeCollectionId, collectionItemIds]);
 
   const sourceCount = useMemo(() => {
     const s = new Set();
@@ -663,27 +747,51 @@ export default function ScreenerClient() {
       </div>
 
       {/* ─── TOOLBAR ─── */}
-      <div className="screener-toolbar" style={{ padding: "0 32px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 10, position: "relative", zIndex: 1 }}>
-        <div className="screener-pills" style={{ display: "flex", gap: 6, alignItems: "center", overflowX: "auto", maxWidth: "65%", paddingBottom: 2 }}>
-          <button className={`pill${showSaved && !activeCollectionId ? " on" : ""}`} onClick={() => { setActiveCollectionId(null); setShowSaved(!showSaved || !!activeCollectionId); if (!showSaved) setCatFilter("All"); }} style={{ padding: "6px 14px", borderRadius: 4, border: (showSaved && !activeCollectionId) ? "1px solid rgba(255,255,255,.12)" : "1px solid var(--b1)", background: (showSaved && !activeCollectionId) ? "rgba(45,212,191,.04)" : "transparent", fontSize: 12, fontWeight: 700, fontFamily: "var(--m)", color: (showSaved && !activeCollectionId) ? "var(--g)" : "var(--t2)", whiteSpace: "nowrap" }}>
-            ★ Saved
-            {savedCount > 0 && <span style={{ marginLeft: 5, fontSize: 10, opacity: 0.5, fontFamily: "var(--m)" }}>{savedCount}</span>}
-          </button>
-          {user && userCollections.map((col) => (
-            <button key={col.id} className={`pill${activeCollectionId === col.id ? " on" : ""}`} onClick={() => { setActiveCollectionId(activeCollectionId === col.id ? null : col.id); setShowSaved(true); setCatFilter("All"); }} style={{ padding: "6px 14px", borderRadius: 4, border: activeCollectionId === col.id ? "1px solid rgba(255,255,255,.12)" : "1px solid var(--b1)", background: activeCollectionId === col.id ? "rgba(45,212,191,.04)" : "transparent", fontSize: 12, fontWeight: 600, fontFamily: "var(--m)", color: activeCollectionId === col.id ? "var(--g)" : "var(--t2)", whiteSpace: "nowrap" }}>
-              {col.icon} {col.name}
-              {col.item_count > 0 && <span style={{ marginLeft: 5, fontSize: 10, opacity: 0.5, fontFamily: "var(--m)" }}>{col.item_count}</span>}
+      <div className="screener-toolbar" style={{ padding: "0 32px 16px", display: "flex", flexDirection: "column", gap: 10, position: "relative", zIndex: 1 }}>
+        {/* Row 1: Sort tabs + Category pills */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
+          <div style={{ display: "flex", gap: 6, alignItems: "center", overflowX: "auto", flex: 1, paddingBottom: 2 }}>
+            {/* Sort tabs */}
+            <div style={{ display: "flex", borderRadius: 6, border: "1px solid var(--b1)", overflow: "hidden", flexShrink: 0, marginRight: 6 }}>
+              {SORT_OPTIONS.map((opt) => (
+                <button key={opt.value} onClick={() => setSortBy(opt.value)} style={{ padding: "6px 12px", border: "none", background: sortBy === opt.value ? "rgba(45,212,191,.08)" : "transparent", color: sortBy === opt.value ? "var(--g)" : "var(--t3)", fontSize: 11, fontWeight: 700, cursor: "pointer", transition: "all .12s", fontFamily: "var(--m)", whiteSpace: "nowrap", letterSpacing: ".02em" }}>
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            {/* Divider */}
+            <div style={{ width: 1, height: 20, background: "var(--b1)", flexShrink: 0 }} />
+            {/* Saved + Collections + Category pills */}
+            <button className={`pill${showSaved && !activeCollectionId ? " on" : ""}`} onClick={() => { setActiveCollectionId(null); setShowSaved(!showSaved || !!activeCollectionId); if (!showSaved) setCatFilter("All"); }} style={{ padding: "6px 14px", borderRadius: 4, border: (showSaved && !activeCollectionId) ? "1px solid rgba(255,255,255,.12)" : "1px solid var(--b1)", background: (showSaved && !activeCollectionId) ? "rgba(45,212,191,.04)" : "transparent", fontSize: 12, fontWeight: 700, fontFamily: "var(--m)", color: (showSaved && !activeCollectionId) ? "var(--g)" : "var(--t2)", whiteSpace: "nowrap" }}>
+              ★ Saved
+              {savedCount > 0 && <span style={{ marginLeft: 5, fontSize: 10, opacity: 0.5, fontFamily: "var(--m)" }}>{savedCount}</span>}
             </button>
-          ))}
-          <button className={`pill${catFilter === "All" && !showSaved ? " on" : ""}`} onClick={() => { setCatFilter("All"); setShowSaved(false); setActiveCollectionId(null); }} style={{ padding: "6px 14px", borderRadius: 4, border: "1px solid var(--b1)", fontSize: 12, fontWeight: 600, fontFamily: "var(--m)", color: "var(--t2)", whiteSpace: "nowrap", background: "transparent" }}>All</button>
-          {topCats.map((cat) => (
-            <button key={cat} className={`pill${catFilter === cat ? " on" : ""}`} onClick={() => setCatFilter(catFilter === cat ? "All" : cat)} style={{ padding: "6px 14px", borderRadius: 4, border: "1px solid var(--b1)", fontSize: 12, fontWeight: 600, fontFamily: "var(--m)", color: "var(--t2)", whiteSpace: "nowrap", background: "transparent" }}>
-              {cat}
-              <span style={{ marginLeft: 5, fontSize: 10, opacity: 0.5, fontFamily: "var(--m)" }}>{catCounts[cat]}</span>
-            </button>
-          ))}
+            {user && userCollections.map((col) => (
+              <button key={col.id} className={`pill${activeCollectionId === col.id ? " on" : ""}`} onClick={() => { setActiveCollectionId(activeCollectionId === col.id ? null : col.id); setShowSaved(true); setCatFilter("All"); }} style={{ padding: "6px 14px", borderRadius: 4, border: activeCollectionId === col.id ? "1px solid rgba(255,255,255,.12)" : "1px solid var(--b1)", background: activeCollectionId === col.id ? "rgba(45,212,191,.04)" : "transparent", fontSize: 12, fontWeight: 600, fontFamily: "var(--m)", color: activeCollectionId === col.id ? "var(--g)" : "var(--t2)", whiteSpace: "nowrap" }}>
+                {col.icon} {col.name}
+                {col.item_count > 0 && <span style={{ marginLeft: 5, fontSize: 10, opacity: 0.5, fontFamily: "var(--m)" }}>{col.item_count}</span>}
+              </button>
+            ))}
+            <button className={`pill${catFilter === "All" && !showSaved ? " on" : ""}`} onClick={() => { setCatFilter("All"); setShowSaved(false); setActiveCollectionId(null); }} style={{ padding: "6px 14px", borderRadius: 4, border: "1px solid var(--b1)", fontSize: 12, fontWeight: 600, fontFamily: "var(--m)", color: "var(--t2)", whiteSpace: "nowrap", background: "transparent" }}>All</button>
+            {topCats.map((cat) => (
+              <button key={cat} className={`pill${catFilter === cat ? " on" : ""}`} onClick={() => setCatFilter(catFilter === cat ? "All" : cat)} style={{ padding: "6px 14px", borderRadius: 4, border: "1px solid var(--b1)", fontSize: 12, fontWeight: 600, fontFamily: "var(--m)", color: "var(--t2)", whiteSpace: "nowrap", background: "transparent" }}>
+                {cat}
+                <span style={{ marginLeft: 5, fontSize: 10, opacity: 0.5, fontFamily: "var(--m)" }}>{catCounts[cat]}</span>
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="screener-search-row" style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {/* Row 2: Source filters + Search + Actions */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+          <div style={{ display: "flex", gap: 4, alignItems: "center", overflowX: "auto" }}>
+            {SOURCE_FILTERS.filter((sf) => sf.value === "all" || (sourceCounts[sf.value] || 0) > 0).map((sf) => (
+              <button key={sf.value} className={`pill${sourceFilter === sf.value ? " on" : ""}`} onClick={() => setSourceFilter(sourceFilter === sf.value ? "all" : sf.value)} style={{ padding: "5px 10px", borderRadius: 4, border: "1px solid var(--b1)", fontSize: 10, fontWeight: 600, fontFamily: "var(--m)", color: sourceFilter === sf.value ? "var(--g)" : "var(--t3)", whiteSpace: "nowrap", background: "transparent", letterSpacing: ".03em", textTransform: "uppercase" }}>
+                {sf.label}
+                {sf.value !== "all" && sourceCounts[sf.value] > 0 && <span style={{ marginLeft: 4, fontSize: 9, opacity: 0.5 }}>{sourceCounts[sf.value]}</span>}
+              </button>
+            ))}
+          </div>
+          <div className="screener-search-row" style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <div style={{ position: "relative", flex: 1 }}>
             <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "var(--t3)", pointerEvents: "none" }}>⌕</span>
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search products..." style={{ width: "100%", padding: "8px 12px 8px 32px", fontSize: 12, borderRadius: 6, border: "1px solid var(--b1)", background: "var(--s1)", color: "var(--t1)", outline: "none", fontFamily: "var(--m)", transition: "border-color .15s" }} onFocus={(e) => e.target.style.borderColor = "var(--b2)"} onBlur={(e) => e.target.style.borderColor = "var(--b1)"} />
@@ -714,6 +822,7 @@ export default function ScreenerClient() {
               <button key={v} onClick={() => setView(v)} style={{ padding: "6px 10px", border: "none", background: view === v ? "rgba(255,255,255,.06)" : "transparent", color: view === v ? "var(--t1)" : "var(--t3)", fontSize: 12, cursor: "pointer", transition: "all .12s", fontFamily: "var(--m)" }}>{v === "feed" ? "☰" : "⊞"}</button>
             ))}
           </div>
+        </div>
         </div>
       </div>
 
