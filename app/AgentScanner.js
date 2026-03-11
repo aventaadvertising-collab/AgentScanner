@@ -204,7 +204,7 @@ export default function AgentScreener() {
   const user = auth?.user;
   const supabase = auth?.supabase;
   const [cat, setCat] = useState("All");
-  const [sort, setSort] = useState("githubStars");
+  const [sort, setSort] = useState("fundingTotal");
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(null);
   const [apply, setApply] = useState(false);
@@ -506,7 +506,7 @@ export default function AgentScreener() {
           ["Products", agg.n, null],
           ["Funding Tracked", agg.totalFunding > 0 ? fmt$(agg.totalFunding) : "—", "var(--g)"],
           ["ARR Tracked", agg.totalARR > 0 ? fmt$(agg.totalARR) : "—", "var(--g)"],
-          ["GitHub Stars", fmtU(agg.totalStars), null],
+          ...(agg.totalStars > 0 ? [["GitHub Stars", fmtU(agg.totalStars), null]] : []),
           ["Open Source", agg.gh, null],
           ["New This Month", agg.newMonth, agg.newMonth > 0 ? "var(--g)" : null],
         ].map(([l, v, c], i) => (
@@ -544,7 +544,7 @@ export default function AgentScreener() {
                 </div>
                 {p.commitActivity ? <MiniCommitSpark weeks={p.commitActivity} w={155} h={24} /> : <Spark data={p.spark} up={(p.mrrChange || 0) >= 0} w={155} h={24} />}
                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 9, color: "var(--t3)" }}>
-                  <span>{p.fundingTotal ? fmt$(p.fundingTotal) + (p.lastRound ? ` · ${p.lastRound}` : "") : p.mrr ? fmt$(p.mrr) + " /mo" : "—"}</span>
+                  <span>{p.fundingTotal ? fmt$(p.fundingTotal) + (p.lastRound && !p.lastRound.includes("Product") ? ` · ${p.lastRound}` : "") : p.mrr ? fmt$(p.mrr) + " /mo" : "—"}</span>
                   <span>{p.mau ? fmtU(p.mau) + " MAU" : "—"}</span>
                 </div>
               </div>
@@ -627,8 +627,16 @@ export default function AgentScreener() {
                 </div>
                 {/* Funding */}
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, fontFamily: "var(--m)", color: p.fundingTotal ? "var(--t1)" : "var(--t3)" }}>{p.fundingTotal ? fmt$(p.fundingTotal) : "—"}</div>
-                  {p.lastRound && <div style={{ fontSize: 8, fontWeight: 600, fontFamily: "var(--m)", color: "var(--t3)", marginTop: 1 }}>{p.lastRound}</div>}
+                  {p.fundingTotal ? (
+                    <>
+                      <div style={{ fontSize: 12, fontWeight: 700, fontFamily: "var(--m)", color: "var(--t1)" }}>{fmt$(p.fundingTotal)}</div>
+                      {p.lastRound && !p.lastRound.includes("Product") && <div style={{ fontSize: 8, fontWeight: 600, fontFamily: "var(--m)", color: "var(--t3)", marginTop: 1 }}>{p.lastRound}</div>}
+                    </>
+                  ) : p.lastRound ? (
+                    <div style={{ fontSize: 9, fontFamily: "var(--m)", color: "var(--t4)" }}>{p.lastRound}</div>
+                  ) : (
+                    <span style={{ fontSize: 12, fontFamily: "var(--m)", color: "var(--t3)" }}>—</span>
+                  )}
                 </div>
                 {/* Revenue */}
                 <div style={{ textAlign: "right" }}>
