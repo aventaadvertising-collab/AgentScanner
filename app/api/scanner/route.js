@@ -355,6 +355,7 @@ export async function GET(request) {
   const offset = parseInt(searchParams.get("offset") || "0");
   const category = searchParams.get("category");
   const fresh = searchParams.get("fresh");
+  const qParam = searchParams.get("q");
 
   // Default: show items from last 48h for freshness. Fall back to wider window if sparse.
   const now = new Date();
@@ -375,6 +376,12 @@ export async function GET(request) {
   if (source) query = query.eq("source", source);
   if (category) query = query.eq("category", category);
 
+  // Server-side search
+  if (qParam) {
+    const escaped = qParam.replace(/[%_]/g, "\\$&");
+    query = query.or(`name.ilike.%${escaped}%,description.ilike.%${escaped}%,category.ilike.%${escaped}%`);
+  }
+
   let { data } = await query;
 
   // If fresh filter returned too few results, widen to 7 days
@@ -387,17 +394,32 @@ export async function GET(request) {
       .range(offset, offset + limit - 1);
     if (source) widerQuery = widerQuery.eq("source", source);
     if (category) widerQuery = widerQuery.eq("category", category);
+    if (qParam) {
+      const escaped = qParam.replace(/[%_]/g, "\\$&");
+      widerQuery = widerQuery.or(`name.ilike.%${escaped}%,description.ilike.%${escaped}%,category.ilike.%${escaped}%`);
+    }
     const wider = await widerQuery;
     if (wider.data && wider.data.length > (data?.length || 0)) {
       data = wider.data;
     }
   }
 
+  // Total count (for pagination)
+  let totalCountQuery = supabase
+    .from("scanner_discoveries")
+    .select("*", { count: "exact", head: true });
+  if (source) totalCountQuery = totalCountQuery.eq("source", source);
+  if (category) totalCountQuery = totalCountQuery.eq("category", category);
+  if (qParam) {
+    const escaped = qParam.replace(/[%_]/g, "\\$&");
+    totalCountQuery = totalCountQuery.or(`name.ilike.%${escaped}%,description.ilike.%${escaped}%,category.ilike.%${escaped}%`);
+  }
+
   // Stats (reuse `now` from above)
   const dayAgo = new Date(now - 24 * 60 * 60 * 1000).toISOString();
   const hourAgo = new Date(now - 60 * 60 * 1000).toISOString();
 
-  const [todayRes, hourRes] = await Promise.allSettled([
+  const [todayRes, hourRes, totalRes] = await Promise.allSettled([
     supabase
       .from("scanner_discoveries")
       .select("*", { count: "exact", head: true })
@@ -406,15 +428,21 @@ export async function GET(request) {
       .from("scanner_discoveries")
       .select("*", { count: "exact", head: true })
       .gte("discovered_at", hourAgo),
+    totalCountQuery,
   ]);
 
   const today = todayRes.status === "fulfilled" ? todayRes.value.count || 0 : 0;
   const thisHour = hourRes.status === "fulfilled" ? hourRes.value.count || 0 : 0;
+  const totalAll = totalRes.status === "fulfilled" ? totalRes.value.count || 0 : 0;
+  const discoveryCount = (data || []).length;
+  const hasMoreResults = (offset + discoveryCount) < totalAll;
 
   return Response.json(
     {
       discoveries: data || [],
       stats: { today, this_hour: thisHour },
+      total: totalAll,
+      has_more: hasMoreResults,
       timestamp: new Date().toISOString(),
     },
     {

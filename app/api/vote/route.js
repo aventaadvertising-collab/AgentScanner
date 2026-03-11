@@ -27,7 +27,7 @@ export async function POST(request) {
     return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
 
-  const { discovery_id, voter_id } = body;
+  const { discovery_id, voter_id, user_id } = body;
   if (!discovery_id || !voter_id) {
     return Response.json({ error: "Missing discovery_id or voter_id" }, { status: 400 });
   }
@@ -56,10 +56,9 @@ export async function POST(request) {
     return Response.json({ voted: false, discovery_id });
   } else {
     // Add vote (toggle on)
-    const { error } = await supabase.from("discovery_votes").insert({
-      voter_id,
-      discovery_id,
-    });
+    const row = { voter_id, discovery_id };
+    if (user_id) row.user_id = user_id;
+    const { error } = await supabase.from("discovery_votes").insert(row);
     if (error) {
       console.error(`[Vote] Insert error: ${error.message}`);
       return Response.json({ error: error.message }, { status: 500 });
@@ -77,14 +76,20 @@ export async function GET(request) {
 
   const { searchParams } = new URL(request.url);
   const voter_id = searchParams.get("voter_id");
-  if (!voter_id) {
+  const user_id = searchParams.get("user_id");
+
+  if (!voter_id && !user_id) {
     return Response.json({ votes: [] });
   }
 
-  const { data } = await supabase
-    .from("discovery_votes")
-    .select("discovery_id")
-    .eq("voter_id", voter_id);
+  let query = supabase.from("discovery_votes").select("discovery_id");
+  if (user_id) {
+    query = query.eq("user_id", user_id);
+  } else {
+    query = query.eq("voter_id", voter_id);
+  }
+
+  const { data } = await query;
 
   return Response.json({
     votes: (data || []).map((d) => d.discovery_id),

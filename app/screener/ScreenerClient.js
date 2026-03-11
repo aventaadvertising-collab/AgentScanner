@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { getSupabase } from "@/lib/supabase";
+import { useAuth } from "@/lib/AuthContext";
 import { CommitHeatmapLoader } from "@/app/components/CommitHeatmap";
 
 // ─── Helpers ───
@@ -58,6 +59,41 @@ function extractRepoPath(item) {
   return m ? m[1] : null;
 }
 
+// ─── Export Helpers ───
+function downloadBlob(content, filename, mime) {
+  const blob = new Blob([content], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function exportCSV(items) {
+  const headers = ["name", "category", "source", "description", "url", "author", "stars", "downloads", "language", "discovered_at"];
+  const escape = (v) => {
+    if (v == null) return "";
+    const s = String(v);
+    return s.includes(",") || s.includes('"') || s.includes("\n") ? `"${s.replace(/"/g, '""')}"` : s;
+  };
+  const rows = items.map((d) => headers.map((h) => escape(d[h])).join(","));
+  const csv = [headers.join(","), ...rows].join("\n");
+  downloadBlob(csv, `agentscreener-${new Date().toISOString().slice(0, 10)}.csv`, "text/csv");
+}
+
+function exportJSON(items) {
+  const data = items.map((d) => ({
+    name: d.name, category: d.category, source: d.source,
+    description: d.description, url: d.url, author: d.author,
+    stars: d.stars, downloads: d.downloads, language: d.language,
+    discovered_at: d.discovered_at,
+  }));
+  downloadBlob(JSON.stringify(data, null, 2), `agentscreener-${new Date().toISOString().slice(0, 10)}.json`, "application/json");
+}
+
 // ─── Main Component ───
 export default function ScreenerClient() {
   const [discoveries, setDiscoveries] = useState([]);
@@ -75,6 +111,22 @@ export default function ScreenerClient() {
   const [userVotes, setUserVotes] = useState(new Set());
   const [showSaved, setShowSaved] = useState(false);
 
+  // ── Export dropdown ──
+  const [showExport, setShowExport] = useState(false);
+  const exportRef = useRef(null);
+
+  // ── Pagination (history) ──
+  const [historyItems, setHistoryItems] = useState([]);
+  const [historyOffset, setHistoryOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [totalCount, setTotalCount] = useState(null);
+
+  // ── Auth + Bookmarks ──
+  const { user } = useAuth();
+  const [userBookmarks, setUserBookmarks] = useState(new Set());
+  const [showAuthMenu, setShowAuthMenu] = useState(false);
+
   const supabase = useMemo(() => getSupabase(), []);
 
   const fetchFeed = useCallback(() => {
@@ -90,6 +142,8 @@ export default function ScreenerClient() {
               .slice(0, 300);
           });
           setStats(d.stats);
+          if (d.total != null) setTotalCount(d.total);
+          if (d.has_more != null) setHasMore(d.has_more);
         }
       })
       .catch(() => {});
@@ -163,7 +217,7 @@ export default function ScreenerClient() {
       .catch(() => {});
   }, []);
 
-  // ── Vote handler (optimistic) ──
+  // ── Vote handler (optimistic) — also toggles bookmark when logged in ──
   const handleVote = useCallback(async (e, discoveryId) => {
     e.stopPropagation();
     if (!voterId) return;
@@ -176,13 +230,29 @@ export default function ScreenerClient() {
     setDiscoveries((prev) =>
       prev.map((d) => d.id === discoveryId ? { ...d, upvotes: (d.upvotes || 0) + (wasVoted ? -1 : 1) } : d)
     );
+    // Optimistic bookmark toggle
+    if (user) {
+      setUserBookmarks((prev) => {
+        const n = new Set(prev);
+        wasVoted ? n.delete(discoveryId) : n.add(discoveryId);
+        return n;
+      });
+    }
     try {
       const r = await fetch("/api/vote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ discovery_id: discoveryId, voter_id: voterId }),
+        body: JSON.stringify({ discovery_id: discoveryId, voter_id: voterId, user_id: user?.id }),
       });
       if (!r.ok) throw new Error();
+      // Also toggle persistent bookmark if logged in
+      if (user) {
+        await fetch("/api/bookmarks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ user_id: user.id, discovery_id: discoveryId }),
+        });
+      }
     } catch {
       setUserVotes((prev) => {
         const n = new Set(prev);
@@ -192,32 +262,119 @@ export default function ScreenerClient() {
       setDiscoveries((prev) =>
         prev.map((d) => d.id === discoveryId ? { ...d, upvotes: (d.upvotes || 0) + (wasVoted ? 1 : -1) } : d)
       );
+      if (user) {
+        setUserBookmarks((prev) => {
+          const n = new Set(prev);
+          wasVoted ? n.add(discoveryId) : n.delete(discoveryId);
+          return n;
+        });
+      }
     }
-  }, [voterId, userVotes]);
+  }, [voterId, userVotes, user]);
+
+  // ── Fetch bookmarks when logged in ──
+  useEffect(() => {
+    if (!user) { setUserBookmarks(new Set()); return; }
+    fetch(`/api/bookmarks?user_id=${user.id}`)
+      .then((r) => r.json())
+      .then((d) => { if (d.bookmarks) setUserBookmarks(new Set(d.bookmarks)); })
+      .catch(() => {});
+  }, [user]);
+
+  // ── Migrate anonymous votes to user on first login ──
+  useEffect(() => {
+    if (!user || !voterId) return;
+    const migKey = `as_votes_migrated_${user.id}`;
+    if (localStorage.getItem(migKey)) return;
+    fetch("/api/vote/migrate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ voter_id: voterId, user_id: user.id }),
+    }).then(() => {
+      localStorage.setItem(migKey, "1");
+      // Re-fetch bookmarks after migration
+      fetch(`/api/bookmarks?user_id=${user.id}`)
+        .then((r) => r.json())
+        .then((d) => { if (d.bookmarks) setUserBookmarks(new Set(d.bookmarks)); })
+        .catch(() => {});
+    }).catch(() => {});
+  }, [user, voterId]);
+
+  // ── Close export dropdown on outside click ──
+  useEffect(() => {
+    if (!showExport) return;
+    const onClick = (e) => { if (exportRef.current && !exportRef.current.contains(e.target)) setShowExport(false); };
+    document.addEventListener("mousedown", onClick);
+    return () => document.removeEventListener("mousedown", onClick);
+  }, [showExport]);
+
+  // ── Load more (pagination) ──
+  const loadMore = useCallback(async () => {
+    if (loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const nextOffset = discoveries.length + historyOffset;
+      const params = new URLSearchParams({ limit: "50", offset: String(nextOffset) });
+      if (catFilter !== "All") params.set("category", catFilter);
+      if (q) params.set("q", q);
+      const r = await fetch(`/api/scanner?${params}`);
+      if (!r.ok) throw new Error();
+      const d = await r.json();
+      if (d.discoveries) {
+        setHistoryItems((prev) => [...prev, ...d.discoveries]);
+        setHistoryOffset((prev) => prev + d.discoveries.length);
+        if (d.has_more != null) setHasMore(d.has_more);
+        else setHasMore(d.discoveries.length >= 50);
+        if (d.total != null) setTotalCount(d.total);
+      }
+    } catch { /* silent */ }
+    setLoadingMore(false);
+  }, [loadingMore, discoveries.length, historyOffset, catFilter, q]);
+
+  // ── Reset history when filters change ──
+  useEffect(() => {
+    setHistoryItems([]);
+    setHistoryOffset(0);
+    setHasMore(false);
+  }, [catFilter, q]);
+
+  // ── Merge live feed + history items, dedup ──
+  const allItems = useMemo(() => {
+    const byId = new Map();
+    for (const d of discoveries) byId.set(d.id || d.external_id, d);
+    for (const d of historyItems) {
+      const key = d.id || d.external_id;
+      if (!byId.has(key)) byId.set(key, d);
+    }
+    return [...byId.values()].sort((a, b) => new Date(b.discovered_at) - new Date(a.discovered_at));
+  }, [discoveries, historyItems]);
 
   const catCounts = useMemo(() => {
     const c = {};
-    for (const d of discoveries) if (d.category) c[d.category] = (c[d.category] || 0) + 1;
+    for (const d of allItems) if (d.category) c[d.category] = (c[d.category] || 0) + 1;
     return c;
-  }, [discoveries]);
+  }, [allItems]);
 
   const topCats = useMemo(() =>
     Object.entries(catCounts).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([cat]) => cat),
   [catCounts]);
 
+  const savedSet = user ? userBookmarks : userVotes;
+  const savedCount = savedSet.size;
+
   const filtered = useMemo(() => {
-    let items = discoveries;
-    if (showSaved) items = items.filter((d) => userVotes.has(d.id));
+    let items = allItems;
+    if (showSaved) items = items.filter((d) => savedSet.has(d.id));
     if (catFilter !== "All") items = items.filter((d) => d.category === catFilter);
     if (q) { const lq = q.toLowerCase(); items = items.filter((d) => d.name?.toLowerCase().includes(lq) || d.description?.toLowerCase().includes(lq) || d.category?.toLowerCase().includes(lq) || d.author?.toLowerCase().includes(lq)); }
     return items;
-  }, [discoveries, catFilter, q, showSaved, userVotes]);
+  }, [allItems, catFilter, q, showSaved, savedSet]);
 
   const sourceCount = useMemo(() => {
     const s = new Set();
-    for (const d of discoveries) if (d.source) s.add(d.source);
+    for (const d of allItems) if (d.source) s.add(d.source);
     return s.size;
-  }, [discoveries]);
+  }, [allItems]);
 
   return (
     <div style={{ "--bg": "#0A0B10", "--s1": "#12141C", "--s2": "#1A1D28", "--b1": "rgba(255,255,255,.06)", "--b2": "rgba(255,255,255,.10)", "--b3": "rgba(255,255,255,.14)", "--t1": "#F2F2F7", "--t2": "rgba(242,242,247,.6)", "--t3": "rgba(242,242,247,.35)", "--g": "#2DD4BF", "--gg": "rgba(45,212,191,.1)", "--gd": "rgba(45,212,191,.04)", "--em": "#2DD4BF", "--m": "'SF Mono', 'JetBrains Mono', 'Fira Code', monospace", "--f": "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif", minHeight: "100vh", background: "var(--bg)", color: "var(--t1)", fontFamily: "var(--f)" }}>
@@ -311,6 +468,13 @@ export default function ScreenerClient() {
           </button>
           <a href="/activity" className="link-hover dash-link" style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid var(--b1)", color: "var(--t2)", fontSize: 12, fontWeight: 600 }}>Activity</a>
           <a href="/dashboard" className="link-hover dash-link" style={{ padding: "6px 14px", borderRadius: 6, border: "1px solid var(--b1)", color: "var(--t2)", fontSize: 12, fontWeight: 600 }}>Dashboard</a>
+          {user ? (
+            <div style={{ width: 28, height: 28, borderRadius: "50%", background: "linear-gradient(135deg, #2DD4BF, #A78BFA)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 800, color: "#0A0B10", cursor: "default", flexShrink: 0 }} title={user.email}>
+              {(user.user_metadata?.full_name?.[0] || user.email?.[0] || "U").toUpperCase()}
+            </div>
+          ) : (
+            <a href="/auth/login" className="ghost-btn" style={{ padding: "6px 14px", borderRadius: 6, color: "var(--g)", fontSize: 12, fontWeight: 700, fontFamily: "var(--m)", textDecoration: "none" }}>Sign In</a>
+          )}
         </div>
       </header>
 
@@ -344,7 +508,7 @@ export default function ScreenerClient() {
         <div className="screener-pills" style={{ display: "flex", gap: 6, alignItems: "center", overflowX: "auto", maxWidth: "65%", paddingBottom: 2 }}>
           <button className={`pill${showSaved ? " on" : ""}`} onClick={() => { setShowSaved(!showSaved); if (!showSaved) setCatFilter("All"); }} style={{ padding: "6px 14px", borderRadius: 4, border: showSaved ? "1px solid rgba(255,255,255,.12)" : "1px solid var(--b1)", background: showSaved ? "rgba(45,212,191,.04)" : "transparent", fontSize: 12, fontWeight: 700, fontFamily: "var(--m)", color: showSaved ? "var(--g)" : "var(--t2)", whiteSpace: "nowrap" }}>
             ★ Saved
-            {userVotes.size > 0 && <span style={{ marginLeft: 5, fontSize: 10, opacity: 0.5, fontFamily: "var(--m)" }}>{userVotes.size}</span>}
+            {savedCount > 0 && <span style={{ marginLeft: 5, fontSize: 10, opacity: 0.5, fontFamily: "var(--m)" }}>{savedCount}</span>}
           </button>
           <button className={`pill${catFilter === "All" && !showSaved ? " on" : ""}`} onClick={() => { setCatFilter("All"); setShowSaved(false); }} style={{ padding: "6px 14px", borderRadius: 4, border: "1px solid var(--b1)", fontSize: 12, fontWeight: 600, fontFamily: "var(--m)", color: "var(--t2)", whiteSpace: "nowrap", background: "transparent" }}>All</button>
           {topCats.map((cat) => (
@@ -358,6 +522,22 @@ export default function ScreenerClient() {
           <div style={{ position: "relative", flex: 1 }}>
             <span style={{ position: "absolute", left: 11, top: "50%", transform: "translateY(-50%)", fontSize: 13, color: "var(--t3)", pointerEvents: "none" }}>⌕</span>
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search products..." style={{ width: "100%", padding: "8px 12px 8px 32px", fontSize: 12, borderRadius: 6, border: "1px solid var(--b1)", background: "var(--s1)", color: "var(--t1)", outline: "none", fontFamily: "var(--m)", transition: "border-color .15s" }} onFocus={(e) => e.target.style.borderColor = "var(--b2)"} onBlur={(e) => e.target.style.borderColor = "var(--b1)"} />
+          </div>
+          {/* Export dropdown */}
+          <div ref={exportRef} style={{ position: "relative" }}>
+            <button className="ghost-btn" onClick={() => setShowExport(!showExport)} style={{ padding: "8px 12px", borderRadius: 6, color: "var(--t2)", fontSize: 12, fontWeight: 600, fontFamily: "var(--m)", display: "flex", alignItems: "center", gap: 5 }}>
+              ↓ Export
+            </button>
+            {showExport && (
+              <div style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, minWidth: 180, background: "var(--s1)", border: "1px solid var(--b2)", borderRadius: 8, padding: 4, zIndex: 50, boxShadow: "0 8px 32px rgba(0,0,0,.4)", animation: "fi .15s ease" }}>
+                <button onClick={() => { exportCSV(filtered); setShowExport(false); }} style={{ width: "100%", padding: "10px 14px", border: "none", background: "transparent", color: "var(--t1)", fontSize: 12, fontWeight: 600, fontFamily: "var(--m)", cursor: "pointer", textAlign: "left", borderRadius: 6, display: "flex", justifyContent: "space-between", alignItems: "center", transition: "background .12s" }} onMouseEnter={(e) => e.target.style.background = "rgba(255,255,255,.04)"} onMouseLeave={(e) => e.target.style.background = "transparent"}>
+                  <span>CSV</span><span style={{ fontSize: 10, color: "var(--t3)" }}>{filtered.length} items</span>
+                </button>
+                <button onClick={() => { exportJSON(filtered); setShowExport(false); }} style={{ width: "100%", padding: "10px 14px", border: "none", background: "transparent", color: "var(--t1)", fontSize: 12, fontWeight: 600, fontFamily: "var(--m)", cursor: "pointer", textAlign: "left", borderRadius: 6, display: "flex", justifyContent: "space-between", alignItems: "center", transition: "background .12s" }} onMouseEnter={(e) => e.target.style.background = "rgba(255,255,255,.04)"} onMouseLeave={(e) => e.target.style.background = "transparent"}>
+                  <span>JSON</span><span style={{ fontSize: 10, color: "var(--t3)" }}>{filtered.length} items</span>
+                </button>
+              </div>
+            )}
           </div>
           <div style={{ display: "flex", borderRadius: 4, border: "1px solid var(--b1)", overflow: "hidden" }}>
             {["feed", "grid"].map((v) => (
@@ -388,17 +568,37 @@ export default function ScreenerClient() {
           <div style={{ padding: "80px 0", textAlign: "center", animation: "fi .5s ease both" }}>
             <div style={{ fontSize: 40, marginBottom: 16, opacity: 0.3 }}>★</div>
             <div style={{ fontSize: 18, fontWeight: 700, color: "var(--t1)", marginBottom: 8, fontFamily: "var(--m)" }}>No saved products yet</div>
-            <div style={{ fontSize: 13, color: "var(--t2)", maxWidth: 380, margin: "0 auto" }}>Upvote products to save them here. Your saved items persist across sessions.</div>
+            <div style={{ fontSize: 13, color: "var(--t2)", maxWidth: 380, margin: "0 auto" }}>
+              {user ? "Upvote products to bookmark them. Your saves persist across devices." : "Upvote products to save them. Sign in to sync saves across devices."}
+            </div>
+            {!user && (
+              <a href="/auth/login" style={{ display: "inline-block", marginTop: 16, padding: "10px 24px", borderRadius: 6, background: "var(--g)", color: "#0A0B10", fontSize: 13, fontWeight: 800, fontFamily: "var(--m)", textDecoration: "none", letterSpacing: ".02em" }}>
+                Sign In to Sync
+              </a>
+            )}
           </div>
         ) : filtered.length === 0 ? (
           <EmptyState />
         ) : view === "feed" ? (
           <div style={{ maxWidth: 900, margin: "0 auto" }}>
-            {filtered.map((d, i) => <FeedCard key={d.id || d.external_id} item={d} index={i} onSelect={setSelectedItem} voted={userVotes.has(d.id)} onVote={handleVote} />)}
+            {filtered.map((d, i) => <FeedCard key={d.id || d.external_id} item={d} index={i} onSelect={setSelectedItem} voted={savedSet.has(d.id)} onVote={handleVote} />)}
           </div>
         ) : (
           <div className="screener-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 12 }}>
-            {filtered.map((d, i) => <GridCard key={d.id || d.external_id} item={d} index={i} onSelect={setSelectedItem} voted={userVotes.has(d.id)} onVote={handleVote} />)}
+            {filtered.map((d, i) => <GridCard key={d.id || d.external_id} item={d} index={i} onSelect={setSelectedItem} voted={savedSet.has(d.id)} onVote={handleVote} />)}
+          </div>
+        )}
+
+        {/* ─── Load More Button ─── */}
+        {!showSaved && filtered.length > 0 && (hasMore || historyItems.length === 0) && (
+          <div style={{ textAlign: "center", marginTop: 24 }}>
+            <button className="ghost-btn" onClick={loadMore} disabled={loadingMore} style={{ padding: "12px 32px", borderRadius: 8, color: "var(--t2)", fontSize: 13, fontWeight: 700, fontFamily: "var(--m)", display: "inline-flex", alignItems: "center", gap: 8, opacity: loadingMore ? 0.5 : 1 }}>
+              {loadingMore ? (
+                <><span style={{ display: "inline-block", animation: "spin .6s linear infinite" }}>⟳</span> Loading...</>
+              ) : (
+                <>Load older discoveries{totalCount != null && ` (${totalCount.toLocaleString()} total)`}</>
+              )}
+            </button>
           </div>
         )}
       </div>
@@ -414,7 +614,7 @@ export default function ScreenerClient() {
       </footer>
 
       {/* ─── DETAIL PANEL ─── */}
-      {selectedItem && <DetailPanel item={selectedItem} onClose={() => setSelectedItem(null)} voted={userVotes.has(selectedItem.id)} onVote={handleVote} />}
+      {selectedItem && <DetailPanel item={selectedItem} onClose={() => setSelectedItem(null)} voted={savedSet.has(selectedItem.id)} onVote={handleVote} />}
     </div>
   );
 }
