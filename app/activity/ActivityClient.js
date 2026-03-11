@@ -6,28 +6,37 @@ import { CommitHeatmap } from "@/app/components/CommitHeatmap";
 import { getSupabase } from "@/lib/supabase";
 
 // ============================================================
-// TERMINAL PULSE — Multi-Signal Live Activity Monitor
-// Spectrogram matrix + composite pulse scoring + cross-source
-// event stream + category-level intelligence
+// TERMINAL PULSE — DexScreener-Style AI Tool Trading Terminal
+// Green/red sentiment · Candlestick charts · Multi-timeframe
+// Marquee ticker · Gainers/Losers · Transaction-style feed
 // ============================================================
 
-// ── Color scale (teal, 5 levels) ──
-const LEVELS = [
-  "rgba(255,255,255,.03)",
-  "rgba(45,212,191,.15)",
-  "rgba(45,212,191,.35)",
-  "rgba(45,212,191,.55)",
-  "rgba(45,212,191,.85)",
-];
+// ── Trend color system (green=up, red=down) ──
+function trendColor(dir) {
+  if (dir === "up") return {
+    line: "#00C853", glow: "rgba(0,200,83,.15)", area: "rgba(0,200,83,.08)",
+    dot: "#00C853", bg: "rgba(0,200,83,.06)", text: "#00C853",
+  };
+  return {
+    line: "#FF1744", glow: "rgba(255,23,68,.15)", area: "rgba(255,23,68,.08)",
+    dot: "#FF1744", bg: "rgba(255,23,68,.06)", text: "#FF1744",
+  };
+}
 
-function getLevel(count, max) {
-  if (!count) return 0;
-  if (max <= 0) return 1;
-  const pct = count / max;
-  if (pct > 0.75) return 4;
-  if (pct > 0.5) return 3;
-  if (pct > 0.25) return 2;
-  return 1;
+// ── SVG Icons ──
+function ChevronUp({ size = 10, color = "#00C853" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" style={{ display: "inline-block", verticalAlign: "middle" }}>
+      <path d="M4 10L8 6L12 10" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+function ChevronDown({ size = 10, color = "#FF1744" }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" style={{ display: "inline-block", verticalAlign: "middle" }}>
+      <path d="M4 6L8 10L12 6" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
 }
 
 // ── Source colors for cross-source badges ──
@@ -87,6 +96,29 @@ function getTrend(weeks) {
   return { dir: change >= 0 ? "up" : "down", pct: Math.abs(change) };
 }
 
+function get1DChange(weeks) {
+  if (!weeks || weeks.length < 1) return null;
+  const last = weeks[weeks.length - 1];
+  const days = last?.d || [];
+  if (days.length < 2) return null;
+  const today = days[days.length - 1] || 0;
+  const yesterday = days[days.length - 2] || 0;
+  if (yesterday === 0 && today === 0) return null;
+  if (yesterday === 0) return { dir: "up", pct: 100 };
+  const change = Math.round(((today - yesterday) / yesterday) * 100);
+  return { dir: change >= 0 ? "up" : "down", pct: Math.abs(change) };
+}
+
+function get1WChange(weeks) {
+  if (!weeks || weeks.length < 2) return null;
+  const recent = weeks[weeks.length - 1]?.t || 0;
+  const prev = weeks[weeks.length - 2]?.t || 0;
+  if (prev === 0 && recent === 0) return null;
+  if (prev === 0) return { dir: "up", pct: 100 };
+  const change = Math.round(((recent - prev) / prev) * 100);
+  return { dir: change >= 0 ? "up" : "down", pct: Math.abs(change) };
+}
+
 function getMomentumScore(weeks) {
   if (!weeks || weeks.length < 8) return 0;
   const recent = weeks.slice(-4).reduce((s, w) => s + w.t, 0);
@@ -105,6 +137,23 @@ function getLast21Days(weeks) {
   return days.slice(-21);
 }
 
+function getVolume7d(weeks) {
+  if (!weeks || weeks.length < 1) return 0;
+  const last = weeks[weeks.length - 1];
+  return last?.t || 0;
+}
+
+// ── OHLC derivation from weekly commit data ──
+function weekToOHLC(week) {
+  const days = week?.d || [];
+  if (days.length === 0) return { o: 0, h: 0, l: 0, c: 0, v: week?.t || 0 };
+  const o = days[0] || 0;
+  const c = days[days.length - 1] || 0;
+  const h = Math.max(...days);
+  const l = Math.min(...days.filter(d => d >= 0));
+  return { o, h, l, c, v: week?.t || 0 };
+}
+
 // ── Signal matching: map scanner discoveries to registry products ──
 
 function buildSignalIndex(products) {
@@ -118,7 +167,6 @@ function buildSignalIndex(products) {
     map.set(`name:${p.name.toLowerCase()}`, p.id);
     map.set(`id:${p.id}`, p.id);
   }
-  // Add website domains
   for (const entry of REGISTRY) {
     if (entry.w) {
       try {
@@ -131,31 +179,26 @@ function buildSignalIndex(products) {
 }
 
 function matchDiscovery(d, idx) {
-  // Try GitHub repo from external_id
   const ghExt = d.external_id?.match(/^(?:github|gh-momentum|gh-trending):(.+)/);
   if (ghExt) {
     const hit = idx.get(`repo:${ghExt[1].toLowerCase()}`);
     if (hit) return hit;
   }
-  // Try GitHub repo from URL
   const ghUrl = d.url?.match(/github\.com\/([^/]+\/[^/]+)/);
   if (ghUrl) {
     const hit = idx.get(`repo:${ghUrl[1].toLowerCase().replace(/\.git$/, "")}`);
     if (hit) return hit;
   }
-  // Try npm/pypi package name
   const pkg = d.external_id?.match(/^(?:npm|pypi):(.+)/);
   if (pkg) {
     const name = pkg[1].toLowerCase();
     const hit = idx.get(`reponame:${name}`) || idx.get(`id:${name}`);
     if (hit) return hit;
   }
-  // Try name match
   if (d.name) {
     const hit = idx.get(`name:${d.name.toLowerCase().trim()}`);
     if (hit) return hit;
   }
-  // Try URL domain
   if (d.url) {
     try {
       const host = new URL(d.url).hostname.replace(/^www\./, "");
@@ -243,11 +286,22 @@ function splinePath(pts) {
   return d;
 }
 
+// ── % change badge ──
+function PctBadge({ change, size = 10 }) {
+  if (!change) return <span style={{ fontSize: size, fontFamily: "var(--m)", color: "var(--t4)" }}>{"\u2013"}</span>;
+  const c = trendColor(change.dir);
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 1, fontSize: size, fontWeight: 700, fontFamily: "var(--m)", color: c.text }}>
+      {change.dir === "up" ? <ChevronUp size={size - 1} color={c.text} /> : <ChevronDown size={size - 1} color={c.text} />}
+      {change.pct}%
+    </span>
+  );
+}
+
 // ────────────────────────────────────────────
-// SpectrogramStrip — Smooth live sparkline chart
-// Cubic-spline area chart with glow, live dot, hi/lo markers
+// SpectrogramStrip — Green/Red live sparkline chart
 // ────────────────────────────────────────────
-function SpectrogramStrip({ days, width = 420, height = 28, showToday = true }) {
+function SpectrogramStrip({ days, width = 420, height = 28, trend }) {
   if (!days || !days.length) return null;
   const max = Math.max(...days, 1);
   const avg = days.reduce((s, v) => s + v, 0) / days.length;
@@ -256,14 +310,15 @@ function SpectrogramStrip({ days, width = 420, height = 28, showToday = true }) 
   const chartH = height - padT - padB;
   const stepX = (width - padX * 2) / (n - 1 || 1);
 
-  // Build point array
+  const dir = trend?.dir || (days[days.length - 1] >= days[0] ? "up" : "down");
+  const tc = trendColor(dir);
+
   const pts = days.map((v, i) => ({
     x: padX + i * stepX,
     y: padT + chartH - (v / max) * chartH,
     v,
   }));
 
-  // Find hi/lo indices
   let hiIdx = 0, loIdx = 0;
   for (let i = 1; i < n; i++) {
     if (days[i] > days[hiIdx]) hiIdx = i;
@@ -279,68 +334,55 @@ function SpectrogramStrip({ days, width = 420, height = 28, showToday = true }) 
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: "block", borderRadius: 4 }}>
       <defs>
         <linearGradient id={`ag-${uid}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="rgba(45,212,191,.22)" />
-          <stop offset="60%" stopColor="rgba(45,212,191,.06)" />
-          <stop offset="100%" stopColor="rgba(45,212,191,.0)" />
+          <stop offset="0%" stopColor={tc.area.replace(/[\d.]+\)$/, ".22)")} />
+          <stop offset="60%" stopColor={tc.area.replace(/[\d.]+\)$/, ".06)")} />
+          <stop offset="100%" stopColor={tc.area.replace(/[\d.]+\)$/, ".0)")} />
         </linearGradient>
         <filter id={`gl-${uid}`} x="-20%" y="-20%" width="140%" height="140%">
           <feGaussianBlur stdDeviation="1.5" result="blur" />
           <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
         </filter>
         <radialGradient id={`lg-${uid}`} cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="rgba(45,212,191,.6)" />
-          <stop offset="100%" stopColor="rgba(45,212,191,0)" />
+          <stop offset="0%" stopColor={tc.glow.replace(/[\d.]+\)$/, ".6)")} />
+          <stop offset="100%" stopColor={tc.glow.replace(/[\d.]+\)$/, "0)")} />
         </radialGradient>
       </defs>
 
-      {/* Background */}
       <rect x={0} y={0} width={width} height={height} rx={4} fill="rgba(255,255,255,.012)" />
 
-      {/* Average line */}
       {avg > 0 && (() => {
         const avgY = padT + chartH - (avg / max) * chartH;
         return <line x1={padX} y1={avgY} x2={width - padX} y2={avgY} stroke="rgba(242,242,247,.05)" strokeWidth={0.5} strokeDasharray="2,3" />;
       })()}
 
-      {/* Area fill */}
       <path d={areaPath} fill={`url(#ag-${uid})`} />
+      <path d={linePath} fill="none" stroke={tc.glow} strokeWidth={3} filter={`url(#gl-${uid})`} />
+      <path d={linePath} fill="none" stroke={tc.line} strokeWidth={1.2} strokeLinecap="round" opacity={0.7} />
 
-      {/* Glow line */}
-      <path d={linePath} fill="none" stroke="rgba(45,212,191,.15)" strokeWidth={3} filter={`url(#gl-${uid})`} />
-
-      {/* Main line */}
-      <path d={linePath} fill="none" stroke="rgba(45,212,191,.7)" strokeWidth={1.2} strokeLinecap="round" />
-
-      {/* Hi marker */}
       {days[hiIdx] > avg && (
         <g>
-          <circle cx={pts[hiIdx].x} cy={pts[hiIdx].y} r={2} fill="none" stroke="rgba(45,212,191,.5)" strokeWidth={0.6} />
-          <circle cx={pts[hiIdx].x} cy={pts[hiIdx].y} r={0.8} fill="rgba(45,212,191,.9)" />
+          <circle cx={pts[hiIdx].x} cy={pts[hiIdx].y} r={2} fill="none" stroke={dir === "up" ? "rgba(0,200,83,.5)" : "rgba(255,23,68,.5)"} strokeWidth={0.6} />
+          <circle cx={pts[hiIdx].x} cy={pts[hiIdx].y} r={0.8} fill={tc.line} opacity={0.9} />
         </g>
       )}
 
-      {/* Lo marker */}
       {days[loIdx] < avg && loIdx !== hiIdx && days[loIdx] > 0 && (
-        <circle cx={pts[loIdx].x} cy={pts[loIdx].y} r={0.8} fill="rgba(220,38,38,.5)" />
+        <circle cx={pts[loIdx].x} cy={pts[loIdx].y} r={0.8} fill="rgba(255,23,68,.5)" />
       )}
 
-      {/* Live dot at end */}
-      {showToday && (
-        <g>
-          <circle cx={lastPt.x} cy={lastPt.y} r={5} fill={`url(#lg-${uid})`}>
-            <animate attributeName="r" values="4;7;4" dur="2s" repeatCount="indefinite" />
-            <animate attributeName="opacity" values="0.6;0.2;0.6" dur="2s" repeatCount="indefinite" />
-          </circle>
-          <circle cx={lastPt.x} cy={lastPt.y} r={1.8} fill="#2DD4BF" />
-          {/* Horizontal scan line from live dot */}
-          <line x1={padX} y1={lastPt.y} x2={lastPt.x - 4} y2={lastPt.y} stroke="rgba(45,212,191,.08)" strokeWidth={0.5} strokeDasharray="1,2" />
-        </g>
-      )}
+      <g>
+        <circle cx={lastPt.x} cy={lastPt.y} r={5} fill={`url(#lg-${uid})`}>
+          <animate attributeName="r" values="4;7;4" dur="2s" repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0.6;0.2;0.6" dur="2s" repeatCount="indefinite" />
+        </circle>
+        <circle cx={lastPt.x} cy={lastPt.y} r={1.8} fill={tc.dot} />
+        <line x1={padX} y1={lastPt.y} x2={lastPt.x - 4} y2={lastPt.y} stroke={tc.glow.replace(/[\d.]+\)$/, ".08)")} strokeWidth={0.5} strokeDasharray="1,2" />
+      </g>
     </svg>
   );
 }
 
-function MicroStrip({ days, width = 120, height = 14 }) {
+function MicroStrip({ days, width = 60, height = 16, trend }) {
   if (!days || !days.length) return null;
   const max = Math.max(...days, 1);
   const last10 = days.slice(-10);
@@ -348,6 +390,9 @@ function MicroStrip({ days, width = 120, height = 14 }) {
   const pad = 2;
   const chartH = height - pad * 2;
   const stepX = (width - pad * 2) / (n - 1 || 1);
+
+  const dir = trend?.dir || (last10[last10.length - 1] >= last10[0] ? "up" : "down");
+  const tc = trendColor(dir);
 
   const pts = last10.map((v, i) => ({
     x: pad + i * stepX,
@@ -361,23 +406,114 @@ function MicroStrip({ days, width = 120, height = 14 }) {
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: "block", borderRadius: 2 }}>
       <defs>
-        <linearGradient id="micro-ag" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="rgba(45,212,191,.15)" />
-          <stop offset="100%" stopColor="rgba(45,212,191,0)" />
+        <linearGradient id={`mic-${dir}`} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={tc.area.replace(/[\d.]+\)$/, ".15)")} />
+          <stop offset="100%" stopColor={tc.area.replace(/[\d.]+\)$/, "0)")} />
         </linearGradient>
       </defs>
-      <path d={areaPath} fill="url(#micro-ag)" />
-      <path d={linePath} fill="none" stroke="rgba(45,212,191,.6)" strokeWidth={1} strokeLinecap="round" />
-      <circle cx={lastPt.x} cy={lastPt.y} r={1.2} fill="#2DD4BF" />
+      <path d={areaPath} fill={`url(#mic-${dir})`} />
+      <path d={linePath} fill="none" stroke={tc.line} strokeWidth={1} strokeLinecap="round" opacity={0.6} />
+      <circle cx={lastPt.x} cy={lastPt.y} r={1.2} fill={tc.dot} />
     </svg>
   );
 }
 
 // ────────────────────────────────────────────
-// Weekly Pulse Chart — expanded row live area chart
-// 52-week smooth line with volume bars, MA, glow
+// Candlestick Chart — 12-week OHLC from commit data
 // ────────────────────────────────────────────
-function WeeklyPulseChart({ weeks, width = 600, height = 80 }) {
+function CandlestickChart({ weeks, width = 560, height = 180 }) {
+  if (!weeks || weeks.length < 4) return null;
+  const n = Math.min(weeks.length, 16);
+  const recent = weeks.slice(-n);
+  const ohlcs = recent.map(weekToOHLC);
+
+  const allVals = ohlcs.flatMap(c => [c.h, c.l]).filter(v => v > 0);
+  const maxVal = Math.max(...allVals, 1);
+  const minVal = Math.min(...allVals, 0);
+  const range = maxVal - minVal || 1;
+  const maxVol = Math.max(...ohlcs.map(c => c.v), 1);
+
+  const pad = { t: 8, b: 20, l: 28, r: 8 };
+  const chartW = width - pad.l - pad.r;
+  const chartH = height - pad.t - pad.b;
+  const candleW = chartW / n;
+  const bodyW = Math.max(candleW * 0.55, 3);
+
+  const yScale = (v) => pad.t + chartH - ((v - minVal) / range) * chartH;
+
+  const uid = useMemo(() => "ck" + Math.random().toString(36).slice(2, 6), []);
+
+  return (
+    <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: "block", borderRadius: 6, background: "rgba(255,255,255,.012)" }}>
+      <defs>
+        <filter id={`cg-${uid}`} x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur stdDeviation="2" result="blur" />
+          <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+        </filter>
+      </defs>
+
+      {/* Grid lines */}
+      {[0.25, 0.5, 0.75].map(pct => {
+        const y = pad.t + chartH * (1 - pct);
+        const val = Math.round(minVal + range * pct);
+        return (
+          <g key={pct}>
+            <line x1={pad.l} y1={y} x2={width - pad.r} y2={y} stroke="rgba(255,255,255,.03)" strokeWidth={0.5} />
+            <text x={pad.l - 4} y={y + 3} fill="var(--t4)" fontSize="6" fontFamily="var(--m)" textAnchor="end">{val}</text>
+          </g>
+        );
+      })}
+
+      {/* Volume bars (background) */}
+      {ohlcs.map((c, i) => {
+        const x = pad.l + i * candleW + candleW / 2;
+        const barH = Math.max((c.v / maxVol) * chartH * 0.2, 1);
+        const isGreen = c.c >= c.o;
+        return (
+          <rect key={`v${i}`} x={x - bodyW / 2} y={pad.t + chartH - barH} width={bodyW} height={barH}
+            fill={isGreen ? "rgba(0,200,83,.06)" : "rgba(255,23,68,.06)"} rx={1} />
+        );
+      })}
+
+      {/* Candles */}
+      {ohlcs.map((c, i) => {
+        const x = pad.l + i * candleW + candleW / 2;
+        const isGreen = c.c >= c.o;
+        const color = isGreen ? "#00C853" : "#FF1744";
+        const top = yScale(Math.max(c.o, c.c));
+        const bot = yScale(Math.min(c.o, c.c));
+        const bodyH = Math.max(bot - top, 1);
+        const wickTop = yScale(c.h);
+        const wickBot = yScale(c.l);
+
+        return (
+          <g key={`c${i}`}>
+            {/* Wick */}
+            <line x1={x} y1={wickTop} x2={x} y2={wickBot} stroke={color} strokeWidth={0.8} opacity={0.6} />
+            {/* Body */}
+            <rect x={x - bodyW / 2} y={top} width={bodyW} height={bodyH} rx={1}
+              fill={isGreen ? color : "transparent"} stroke={color} strokeWidth={0.8}
+              opacity={0.85} filter={i === n - 1 ? `url(#cg-${uid})` : undefined} />
+          </g>
+        );
+      })}
+
+      {/* Week labels */}
+      {recent.map((w, i) => {
+        if (i % 4 !== 0 && i !== n - 1) return null;
+        const x = pad.l + i * candleW + candleW / 2;
+        const d = new Date(w.w * 1000);
+        const label = `${d.getMonth() + 1}/${d.getDate()}`;
+        return <text key={`l${i}`} x={x} y={height - 4} fill="var(--t4)" fontSize="6" fontFamily="var(--m)" textAnchor="middle">{label}</text>;
+      })}
+    </svg>
+  );
+}
+
+// ────────────────────────────────────────────
+// Weekly Pulse Chart — green/red live area chart
+// ────────────────────────────────────────────
+function WeeklyPulseChart({ weeks, width = 560, height = 72, trend }) {
   if (!weeks || weeks.length < 4) return null;
   const n = Math.min(weeks.length, 52);
   const recent = weeks.slice(-n);
@@ -385,19 +521,19 @@ function WeeklyPulseChart({ weeks, width = 600, height = 80 }) {
   const pad = 4;
   const labelH = 10;
   const chartH = height - pad * 2 - labelH;
-  const stepX = (width - pad * 2 - 20) / (n - 1 || 1); // 20px left for y-labels
-  const ox = pad + 20; // origin x after labels
+  const stepX = (width - pad * 2 - 20) / (n - 1 || 1);
+  const ox = pad + 20;
 
+  const dir = trend?.dir || "up";
+  const tc = trendColor(dir);
   const weekTotals = recent.map(w => w.t);
 
-  // Data points for the main line
   const pts = weekTotals.map((t, i) => ({
     x: ox + i * stepX,
     y: pad + chartH - (t / maxT) * chartH,
     v: t,
   }));
 
-  // 4-week moving average
   const maPts = weekTotals.map((_, i) => {
     const start = Math.max(0, i - 3);
     const slice = weekTotals.slice(start, i + 1);
@@ -411,73 +547,58 @@ function WeeklyPulseChart({ weeks, width = 600, height = 80 }) {
   const lastPt = pts[n - 1];
   const uid = useMemo(() => "wk" + Math.random().toString(36).slice(2, 8), []);
 
-  // Volume bars (thin, behind the line)
   const barW = Math.max(stepX * 0.4, 1.5);
 
   return (
     <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} style={{ display: "block", borderRadius: 6, background: "rgba(255,255,255,.012)" }}>
       <defs>
         <linearGradient id={`wag-${uid}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="rgba(45,212,191,.16)" />
-          <stop offset="50%" stopColor="rgba(45,212,191,.04)" />
-          <stop offset="100%" stopColor="rgba(45,212,191,0)" />
+          <stop offset="0%" stopColor={tc.area.replace(/[\d.]+\)$/, ".16)")} />
+          <stop offset="50%" stopColor={tc.area.replace(/[\d.]+\)$/, ".04)")} />
+          <stop offset="100%" stopColor={tc.area.replace(/[\d.]+\)$/, "0)")} />
         </linearGradient>
         <filter id={`wgl-${uid}`} x="-20%" y="-20%" width="140%" height="140%">
           <feGaussianBlur stdDeviation="2" result="blur" />
           <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
         </filter>
         <radialGradient id={`wlg-${uid}`} cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor="rgba(45,212,191,.7)" />
-          <stop offset="100%" stopColor="rgba(45,212,191,0)" />
+          <stop offset="0%" stopColor={tc.glow.replace(/[\d.]+\)$/, ".7)")} />
+          <stop offset="100%" stopColor={tc.glow.replace(/[\d.]+\)$/, "0)")} />
         </radialGradient>
       </defs>
 
-      {/* Grid lines */}
       {[0.25, 0.5, 0.75].map(pct => {
         const y = pad + chartH - pct * chartH;
         return <line key={pct} x1={ox} y1={y} x2={width - pad} y2={y} stroke="rgba(255,255,255,.03)" strokeWidth={0.5} />;
       })}
 
-      {/* Y-axis labels */}
       <text x={pad} y={pad + 6} fill="var(--t4)" fontSize="6" fontFamily="var(--m)">{maxT}</text>
       <text x={pad} y={pad + chartH * 0.5 + 2} fill="var(--t4)" fontSize="6" fontFamily="var(--m)">{Math.round(maxT / 2)}</text>
       <text x={pad} y={pad + chartH} fill="var(--t4)" fontSize="6" fontFamily="var(--m)">0</text>
 
-      {/* Volume bars behind */}
       {weekTotals.map((t, i) => {
         const barH = Math.max((t / maxT) * chartH, 0.5);
         const x = ox + i * stepX - barW / 2;
         const y = pad + chartH - barH;
         const alpha = t > 0 ? 0.04 + (t / maxT) * 0.08 : 0.01;
-        return <rect key={i} x={x} y={y} width={barW} height={barH} rx={0.5} fill={`rgba(45,212,191,${alpha})`} />;
+        return <rect key={i} x={x} y={y} width={barW} height={barH} rx={0.5} fill={tc.area.replace(/[\d.]+\)$/, `${alpha})`)} />;
       })}
 
-      {/* Area fill */}
       <path d={areaPath} fill={`url(#wag-${uid})`} />
-
-      {/* MA line (dimmer, dashed) */}
       <path d={maLinePath} fill="none" stroke="rgba(242,242,247,.12)" strokeWidth={0.8} strokeDasharray="3,2" strokeLinecap="round" />
+      <path d={linePath} fill="none" stroke={tc.glow} strokeWidth={4} filter={`url(#wgl-${uid})`} />
+      <path d={linePath} fill="none" stroke={tc.line} strokeWidth={1.4} strokeLinecap="round" opacity={0.75} />
 
-      {/* Glow line */}
-      <path d={linePath} fill="none" stroke="rgba(45,212,191,.12)" strokeWidth={4} filter={`url(#wgl-${uid})`} />
-
-      {/* Main line */}
-      <path d={linePath} fill="none" stroke="rgba(45,212,191,.75)" strokeWidth={1.4} strokeLinecap="round" />
-
-      {/* Live dot */}
       <circle cx={lastPt.x} cy={lastPt.y} r={6} fill={`url(#wlg-${uid})`}>
         <animate attributeName="r" values="5;8;5" dur="2s" repeatCount="indefinite" />
         <animate attributeName="opacity" values="0.6;0.25;0.6" dur="2s" repeatCount="indefinite" />
       </circle>
-      <circle cx={lastPt.x} cy={lastPt.y} r={2.2} fill="#2DD4BF" />
+      <circle cx={lastPt.x} cy={lastPt.y} r={2.2} fill={tc.dot} />
 
-      {/* Horizontal price line from live dot */}
-      <line x1={ox} y1={lastPt.y} x2={lastPt.x - 5} y2={lastPt.y} stroke="rgba(45,212,191,.06)" strokeWidth={0.5} strokeDasharray="1,2" />
-      {/* Value label at live dot */}
-      <rect x={lastPt.x + 4} y={lastPt.y - 5} width={20} height={10} rx={2} fill="rgba(45,212,191,.12)" />
-      <text x={lastPt.x + 6} y={lastPt.y + 2} fill="#2DD4BF" fontSize="6" fontWeight="700" fontFamily="var(--m)">{weekTotals[n - 1]}</text>
+      <line x1={ox} y1={lastPt.y} x2={lastPt.x - 5} y2={lastPt.y} stroke={tc.glow.replace(/[\d.]+\)$/, ".06)")} strokeWidth={0.5} strokeDasharray="1,2" />
+      <rect x={lastPt.x + 4} y={lastPt.y - 5} width={20} height={10} rx={2} fill={tc.bg} />
+      <text x={lastPt.x + 6} y={lastPt.y + 2} fill={tc.text} fontSize="6" fontWeight="700" fontFamily="var(--m)">{weekTotals[n - 1]}</text>
 
-      {/* Month labels at bottom */}
       {(() => {
         const labels = [];
         let lastMonth = -1;
@@ -506,7 +627,7 @@ function ShimmerStrip({ width = 420, height = 28 }) {
 }
 
 // ────────────────────────────────────────────
-// Product Row — single line in the matrix
+// Product Row — DexScreener-style row
 // ────────────────────────────────────────────
 function ProductRow({ product, data, rank, expanded, onToggle, signals, pulseData }) {
   const weeks = data?.weeks || null;
@@ -516,64 +637,78 @@ function ProductRow({ product, data, rank, expanded, onToggle, signals, pulseDat
   const days21 = useMemo(() => getLast21Days(weeks), [weeks]);
   const momentum = useMemo(() => getMomentumScore(weeks), [weeks]);
   const trend = useMemo(() => getTrend(weeks), [weeks]);
+  const change1d = useMemo(() => get1DChange(weeks), [weeks]);
+  const change1w = useMemo(() => get1WChange(weeks), [weeks]);
   const total4wk = useMemo(() => recentTotal(weeks, 4), [weeks]);
-  const todayCommits = days21 ? days21[days21.length - 1] : 0;
+  const vol7d = useMemo(() => getVolume7d(weeks), [weeks]);
 
   const pulse = pulseData?.pulse || 0;
-  const isHot = pulse > 0.3 || momentum > 1.5;
+  const sigCount = pulseData?.active || 0;
   const isSurging = pulse > 0.5 || momentum > 2;
+  const isHot = pulse > 0.3 || momentum > 1.5;
+
+  const trendDir = trend?.dir || "up";
 
   return (
     <div>
       <div className="pulse-row" onClick={onToggle}
         style={{
           display: "flex", alignItems: "center", gap: 0,
-          padding: "6px 16px 6px 0",
+          padding: "5px 12px 5px 0",
           borderBottom: expanded ? "none" : "1px solid rgba(255,255,255,.03)",
           cursor: "pointer", transition: "background .15s", position: "relative",
-          borderLeft: isSurging ? "2px solid rgba(45,212,191,.5)" : isHot ? "2px solid rgba(45,212,191,.2)" : "2px solid transparent",
+          borderLeft: isSurging ? `2px solid ${trendColor(trendDir).line}55` : isHot ? `2px solid ${trendColor(trendDir).line}33` : "2px solid transparent",
         }}>
         {/* Rank */}
-        <span style={{ width: 32, textAlign: "right", fontSize: 10, fontFamily: "var(--m)", color: rank <= 3 && status === "loaded" ? "var(--g)" : "var(--t4)", fontWeight: rank <= 3 && status === "loaded" ? 700 : 400, flexShrink: 0, paddingRight: 10 }}>
+        <span style={{ width: 28, textAlign: "right", fontSize: 10, fontFamily: "var(--m)", color: rank <= 3 && status === "loaded" ? "var(--t1)" : "var(--t4)", fontWeight: rank <= 3 && status === "loaded" ? 700 : 400, flexShrink: 0, paddingRight: 8 }}>
           {status === "loaded" ? rank : "\u00B7\u00B7"}
         </span>
 
         {/* Name + Category + Signal dots */}
-        <div className="row-name" style={{ width: 160, flexShrink: 0, minWidth: 0, paddingRight: 10 }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: "var(--t1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", letterSpacing: "-.01em" }}>
+        <div className="row-name" style={{ width: 140, flexShrink: 0, minWidth: 0, paddingRight: 6 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--t1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "var(--h)" }}>
             {product.name}
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-            <span style={{ fontSize: 9, fontFamily: "var(--m)", color: "var(--t4)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            <span style={{ fontSize: 8, fontFamily: "var(--m)", color: "var(--t4)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
               {product.category}
             </span>
             <SignalDots signals={signals} />
           </div>
         </div>
 
-        {/* Spectrogram */}
-        <div className="row-spectrogram" style={{ flex: 1, minWidth: 0, paddingRight: 10 }}>
+        {/* Mini chart */}
+        <div className="row-mini-chart" style={{ width: 64, flexShrink: 0, paddingRight: 6 }}>
+          {status === "loaded" && days21 ? (
+            <MicroStrip days={days21} width={58} height={20} trend={trend} />
+          ) : status === "loading" || status === "pending" ? (
+            <div style={{ width: 58, height: 20, borderRadius: 2, background: "rgba(255,255,255,.02)" }} />
+          ) : null}
+        </div>
+
+        {/* Spectrogram (main chart, hidden on smaller screens) */}
+        <div className="row-spectrogram" style={{ flex: 1, minWidth: 0, paddingRight: 8 }}>
           {status === "pending" || status === "loading" ? (
-            <ShimmerStrip width={380} height={28} />
+            <ShimmerStrip width={280} height={28} />
           ) : status === "error" ? (
-            <div style={{ height: 28, borderRadius: 4, background: "rgba(220,38,38,.04)", display: "flex", alignItems: "center", paddingLeft: 8 }}>
-              <span style={{ fontSize: 9, color: "rgba(220,38,38,.5)", fontFamily: "var(--m)" }}>{errorMsg || "failed"}</span>
+            <div style={{ height: 28, borderRadius: 4, background: "rgba(255,23,68,.04)", display: "flex", alignItems: "center", paddingLeft: 8 }}>
+              <span style={{ fontSize: 9, color: "rgba(255,23,68,.5)", fontFamily: "var(--m)" }}>{errorMsg || "failed"}</span>
             </div>
           ) : days21 ? (
-            <SpectrogramStrip days={days21} width={380} height={28} />
+            <SpectrogramStrip days={days21} width={280} height={28} trend={trend} />
           ) : (
             <div style={{ height: 28, borderRadius: 4, background: "rgba(255,255,255,.02)" }} />
           )}
         </div>
 
         {/* Pulse */}
-        <div style={{ width: 48, flexShrink: 0, textAlign: "right", paddingRight: 10 }}>
+        <div style={{ width: 44, flexShrink: 0, textAlign: "right", paddingRight: 6 }}>
           {status === "loaded" && pulse > 0 ? (
             <span style={{
               fontSize: 10, fontWeight: 700, fontFamily: "var(--m)",
-              padding: "1px 5px", borderRadius: 3,
-              color: pulse > 0.5 ? "var(--g)" : pulse > 0.2 ? "var(--t1)" : "var(--t3)",
-              background: `rgba(45,212,191,${Math.min(pulse * 0.15, 0.12)})`,
+              padding: "1px 4px", borderRadius: 3,
+              color: pulse > 0.5 ? "#00C853" : pulse > 0.2 ? "var(--t1)" : "var(--t3)",
+              background: pulse > 0.5 ? "rgba(0,200,83,.06)" : pulse > 0.2 ? "rgba(255,255,255,.03)" : "transparent",
             }}>
               {pulse.toFixed(2)}
             </span>
@@ -582,62 +717,67 @@ function ProductRow({ product, data, rank, expanded, onToggle, signals, pulseDat
           )}
         </div>
 
-        {/* Today */}
-        <div style={{ width: 40, flexShrink: 0, textAlign: "right", paddingRight: 10 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: todayCommits > 0 ? "var(--g)" : "var(--t4)" }}>
-            {status === "loaded" ? todayCommits : "\u2013"}
+        {/* 1D% */}
+        <div className="row-pct" style={{ width: 44, flexShrink: 0, textAlign: "right", paddingRight: 6 }}>
+          {status === "loaded" ? <PctBadge change={change1d} size={9} /> : <span style={{ fontSize: 9, fontFamily: "var(--m)", color: "var(--t4)" }}>{"\u2013"}</span>}
+        </div>
+
+        {/* 1W% */}
+        <div className="row-pct" style={{ width: 44, flexShrink: 0, textAlign: "right", paddingRight: 6 }}>
+          {status === "loaded" ? <PctBadge change={change1w} size={9} /> : <span style={{ fontSize: 9, fontFamily: "var(--m)", color: "var(--t4)" }}>{"\u2013"}</span>}
+        </div>
+
+        {/* 4W% (trend) */}
+        <div className="row-pct" style={{ width: 48, flexShrink: 0, textAlign: "right", paddingRight: 6 }}>
+          {status === "loaded" ? <PctBadge change={trend} size={9} /> : <span style={{ fontSize: 9, fontFamily: "var(--m)", color: "var(--t4)" }}>{"\u2013"}</span>}
+        </div>
+
+        {/* VOL */}
+        <div className="row-vol" style={{ width: 40, flexShrink: 0, textAlign: "right", paddingRight: 6 }}>
+          <span style={{ fontSize: 9, fontWeight: 600, fontFamily: "var(--m)", color: vol7d > 0 ? "var(--t2)" : "var(--t4)" }}>
+            {status === "loaded" ? (vol7d >= 1000 ? `${(vol7d / 1000).toFixed(1)}k` : vol7d) : "\u2013"}
           </span>
         </div>
 
-        {/* 4wk total */}
-        <div style={{ width: 48, flexShrink: 0, textAlign: "right", paddingRight: 10 }}>
-          <span style={{ fontSize: 11, fontWeight: 600, fontFamily: "var(--m)", color: total4wk > 0 ? "var(--t1)" : "var(--t4)" }}>
-            {status === "loaded" ? total4wk : "\u2013"}
-          </span>
-        </div>
-
-        {/* Trend */}
-        <div style={{ width: 56, flexShrink: 0, textAlign: "right" }}>
-          {trend ? (
+        {/* SIGS */}
+        <div style={{ width: 32, flexShrink: 0, textAlign: "right" }}>
+          {status === "loaded" && sigCount > 0 ? (
             <span style={{
-              fontSize: 10, fontWeight: 700, fontFamily: "var(--m)",
-              color: trend.dir === "up" ? "var(--up)" : "var(--dn)",
-              padding: "1px 5px", borderRadius: 3,
-              background: trend.dir === "up" ? "rgba(22,163,74,.08)" : "rgba(220,38,38,.08)",
+              fontSize: 8, fontWeight: 700, fontFamily: "var(--m)",
+              padding: "1px 4px", borderRadius: 8,
+              background: sigCount >= 3 ? "rgba(0,200,83,.08)" : "rgba(255,255,255,.04)",
+              color: sigCount >= 3 ? "#00C853" : "var(--t3)",
             }}>
-              {trend.dir === "up" ? "\u2191" : "\u2193"}{trend.pct}%
+              {sigCount}
             </span>
-          ) : status === "loaded" ? (
-            <span style={{ fontSize: 10, fontFamily: "var(--m)", color: "var(--t4)" }}>\u2013</span>
           ) : null}
         </div>
       </div>
 
       {/* Expanded detail */}
       {expanded && weeks && (
-        <div style={{ padding: "12px 16px 16px 42px", background: "var(--s1)", borderBottom: "1px solid var(--b1)", borderLeft: "2px solid rgba(45,212,191,.3)", animation: "fi .25s ease" }}>
-          <div style={{ display: "flex", gap: 20, marginBottom: 12, flexWrap: "wrap" }}>
+        <div style={{ padding: "12px 16px 16px 36px", background: "var(--s1)", borderBottom: "1px solid var(--b1)", borderLeft: `2px solid ${trendColor(trendDir).line}44`, animation: "fi .25s ease" }}>
+          {/* Stats row */}
+          <div style={{ display: "flex", gap: 16, marginBottom: 12, flexWrap: "wrap" }}>
             <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
               <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--t4)", fontFamily: "var(--m)" }}>Repo</span>
-              <a href={`https://github.com/${product.repo}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, fontFamily: "var(--m)", color: "var(--g)", textDecoration: "none" }}>{product.repo}</a>
+              <a href={`https://github.com/${product.repo}`} target="_blank" rel="noopener noreferrer" style={{ fontSize: 11, fontFamily: "var(--m)", color: "#2DD4BF", textDecoration: "none" }}>{product.repo}</a>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
               <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--t4)", fontFamily: "var(--m)" }}>Pulse</span>
-              <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: pulse > 0.3 ? "var(--g)" : "var(--t1)" }}>{pulse.toFixed(2)} ({pulseData?.active || 0}s)</span>
+              <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: pulse > 0.3 ? "#00C853" : "var(--t1)" }}>{pulse.toFixed(2)} ({sigCount}s)</span>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-              <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--t4)", fontFamily: "var(--m)" }}>Momentum</span>
-              <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: momentum > 1.5 ? "var(--g)" : "var(--t1)" }}>
-                {momentum === 999 ? "NEW" : momentum > 0 ? `${momentum.toFixed(1)}x` : "\u2013"}
-              </span>
+              <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--t4)", fontFamily: "var(--m)" }}>1D / 1W / 4W</span>
+              <div style={{ display: "flex", gap: 8 }}>
+                <PctBadge change={change1d} size={10} />
+                <PctBadge change={change1w} size={10} />
+                <PctBadge change={trend} size={10} />
+              </div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-              <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--t4)", fontFamily: "var(--m)" }}>Today</span>
-              <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: todayCommits > 0 ? "var(--g)" : "var(--t3)" }}>{todayCommits}</span>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
-              <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--t4)", fontFamily: "var(--m)" }}>4wk</span>
-              <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: "var(--t1)" }}>{total4wk}</span>
+              <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--t4)", fontFamily: "var(--m)" }}>Vol (7d)</span>
+              <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: "var(--t1)" }}>{vol7d}</span>
             </div>
           </div>
 
@@ -653,10 +793,16 @@ function ProductRow({ product, data, rank, expanded, onToggle, signals, pulseDat
             </div>
           )}
 
-          {/* Weekly pulse chart — 52-week asset-style view */}
+          {/* Candlestick chart */}
+          <div style={{ marginBottom: 12 }}>
+            <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--t4)", fontFamily: "var(--m)", display: "block", marginBottom: 4 }}>CANDLESTICK (WEEKLY OHLC)</span>
+            <CandlestickChart weeks={weeks} width={560} height={160} />
+          </div>
+
+          {/* Weekly pulse chart */}
           <div style={{ marginBottom: 12 }}>
             <span style={{ fontSize: 8, fontWeight: 600, letterSpacing: ".06em", textTransform: "uppercase", color: "var(--t4)", fontFamily: "var(--m)", display: "block", marginBottom: 4 }}>WEEKLY ACTIVITY</span>
-            <WeeklyPulseChart weeks={weeks} width={560} height={72} />
+            <WeeklyPulseChart weeks={weeks} width={560} height={72} trend={trend} />
           </div>
 
           <CommitHeatmap weeks={weeks} fetchedAt={data?.fetched_at} />
@@ -667,54 +813,57 @@ function ProductRow({ product, data, rank, expanded, onToggle, signals, pulseDat
 }
 
 // ────────────────────────────────────────────
-// Top Movers Ribbon
+// Marquee Ticker Tape — scrolling top movers
 // ────────────────────────────────────────────
-function TopMoversRibbon({ movers }) {
+function MarqueeTicker({ movers }) {
   if (!movers || movers.length === 0) return null;
+  const items = [...movers, ...movers]; // duplicate for seamless loop
   return (
-    <div style={{ borderBottom: "1px solid var(--b1)", background: "rgba(10,11,16,.6)", overflow: "hidden" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: 0, padding: "0 16px", height: 34, overflowX: "auto", overflowY: "hidden" }} className="movers-ribbon">
-        <span style={{ fontSize: 8, fontWeight: 700, fontFamily: "var(--m)", color: "var(--t4)", letterSpacing: ".08em", marginRight: 10, whiteSpace: "nowrap", flexShrink: 0 }}>TOP MOVERS</span>
-        {movers.map((m, i) => (
-          <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 5, padding: "3px 10px", borderRight: "1px solid rgba(255,255,255,.04)", whiteSpace: "nowrap", flexShrink: 0, animation: `fi .3s ease ${i * 0.04}s both` }}>
-            <span style={{ fontSize: 10, fontWeight: 600, color: "var(--t1)", letterSpacing: "-.01em" }}>{m.name}</span>
-            {m.days21 && <MicroStrip days={m.days21} width={50} height={7} />}
-            <span style={{ fontSize: 9, fontWeight: 700, fontFamily: "var(--m)", color: m.trend?.dir === "up" ? "var(--up)" : m.trend?.dir === "down" ? "var(--dn)" : "var(--t3)" }}>
-              {m.trend ? `${m.trend.dir === "up" ? "\u2191" : "\u2193"}${m.trend.pct}%` : "\u2013"}
+    <div style={{ borderBottom: "1px solid var(--b1)", background: "rgba(10,11,16,.6)", overflow: "hidden", height: 28 }}>
+      <div className="marquee-track" style={{ display: "flex", alignItems: "center", height: "100%", whiteSpace: "nowrap" }}>
+        {items.map((m, i) => {
+          const tc = trendColor(m.trend?.dir || "up");
+          return (
+            <span key={`${m.id}-${i}`} style={{ display: "inline-flex", alignItems: "center", gap: 4, padding: "0 12px", fontSize: 10, fontFamily: "var(--m)", flexShrink: 0 }}>
+              <span style={{ fontWeight: 700, color: "var(--t1)", fontFamily: "var(--h)" }}>{m.name}</span>
+              <span style={{ color: tc.text, fontWeight: 700 }}>
+                {m.trend?.dir === "up" ? "+" : "-"}{m.trend?.pct || 0}%
+              </span>
+              <span style={{ color: "var(--t4)", fontSize: 7, margin: "0 4px" }}>{"\u00B7"}</span>
             </span>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );
 }
 
 // ────────────────────────────────────────────
-// Category Pulse Strip
+// Category Pulse Strip — compact sector chips
 // ────────────────────────────────────────────
 function CategoryPulseStrip({ categories, activeCat, onSelect }) {
   if (!categories || categories.length === 0) return null;
   const maxP = Math.max(...categories.map((c) => c.totalPulse), 0.01);
   return (
-    <div style={{ borderBottom: "1px solid var(--b1)", background: "rgba(10,11,16,.4)", padding: "5px 16px", overflow: "hidden" }}>
+    <div style={{ borderBottom: "1px solid var(--b1)", background: "rgba(10,11,16,.4)", padding: "4px 16px", overflow: "hidden" }}>
       <div style={{ display: "flex", alignItems: "center", gap: 0 }} className="movers-ribbon">
-        <span style={{ fontSize: 8, fontWeight: 700, fontFamily: "var(--m)", color: "var(--t4)", letterSpacing: ".08em", marginRight: 10, whiteSpace: "nowrap", flexShrink: 0 }}>SECTORS</span>
+        <span style={{ fontSize: 7, fontWeight: 700, fontFamily: "var(--m)", color: "var(--t4)", letterSpacing: ".08em", marginRight: 8, whiteSpace: "nowrap", flexShrink: 0 }}>SECTORS</span>
         {categories.map((c, i) => {
-          const barW = Math.max((c.totalPulse / maxP) * 28, 3);
+          const barW = Math.max((c.totalPulse / maxP) * 24, 3);
           const isActive = activeCat === c.name;
           return (
             <div key={c.name} onClick={() => onSelect(isActive ? "All" : c.name)} style={{
-              display: "flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 3,
-              background: isActive ? "rgba(45,212,191,.06)" : "rgba(255,255,255,.02)",
-              border: isActive ? "1px solid rgba(45,212,191,.15)" : "1px solid rgba(255,255,255,.03)",
+              display: "flex", alignItems: "center", gap: 3, padding: "2px 6px", borderRadius: 3,
+              background: isActive ? "rgba(0,200,83,.06)" : "rgba(255,255,255,.02)",
+              border: isActive ? "1px solid rgba(0,200,83,.15)" : "1px solid rgba(255,255,255,.03)",
               whiteSpace: "nowrap", flexShrink: 0, cursor: "pointer", transition: "all .15s",
               animation: `fi .3s ease ${i * 0.03}s both`,
             }}>
-              <div style={{ width: 28, height: 3, borderRadius: 1, background: "rgba(255,255,255,.04)", overflow: "hidden" }}>
-                <div style={{ width: barW, height: "100%", borderRadius: 1, background: "var(--g)", opacity: 0.5 + (c.totalPulse / maxP) * 0.5 }} />
+              <div style={{ width: 24, height: 3, borderRadius: 1, background: "rgba(255,255,255,.04)", overflow: "hidden" }}>
+                <div style={{ width: barW, height: "100%", borderRadius: 1, background: "#00C853", opacity: 0.4 + (c.totalPulse / maxP) * 0.6 }} />
               </div>
-              <span style={{ fontSize: 9, fontWeight: 600, color: isActive ? "var(--g)" : "var(--t2)" }}>{c.name}</span>
-              <span style={{ fontSize: 8, fontFamily: "var(--m)", color: "var(--t4)" }}>{c.count}</span>
+              <span style={{ fontSize: 8, fontWeight: 600, color: isActive ? "#00C853" : "var(--t2)", fontFamily: "var(--h)" }}>{c.name}</span>
+              <span style={{ fontSize: 7, fontFamily: "var(--m)", color: "var(--t4)" }}>{c.count}</span>
             </div>
           );
         })}
@@ -724,30 +873,81 @@ function CategoryPulseStrip({ categories, activeCat, onSelect }) {
 }
 
 // ────────────────────────────────────────────
-// Event Feed Card — cross-source sidebar entry
+// Gainers & Losers Panel
+// ────────────────────────────────────────────
+function GainersLosersPanel({ enriched }) {
+  const loaded = enriched.filter(p => p.status === "loaded" && p.trend);
+  if (loaded.length < 4) return null;
+
+  const byTrend = [...loaded].sort((a, b) => {
+    const aVal = (a.trend.dir === "up" ? 1 : -1) * a.trend.pct;
+    const bVal = (b.trend.dir === "up" ? 1 : -1) * b.trend.pct;
+    return bVal - aVal;
+  });
+
+  const gainers = byTrend.filter(p => p.trend.dir === "up").slice(0, 5);
+  const losers = byTrend.filter(p => p.trend.dir === "down").slice(0, 5).reverse();
+
+  return (
+    <div style={{ display: "flex", gap: 0, borderBottom: "1px solid var(--b1)", background: "rgba(10,11,16,.3)" }}>
+      {/* Gainers */}
+      <div style={{ flex: 1, padding: "6px 12px", borderRight: "1px solid var(--b1)" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
+          <ChevronUp size={8} color="#00C853" />
+          <span style={{ fontSize: 7, fontWeight: 700, fontFamily: "var(--m)", color: "#00C853", letterSpacing: ".08em" }}>GAINERS</span>
+        </div>
+        {gainers.map((p, i) => (
+          <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0", animation: `fi .2s ease ${i * 0.04}s both` }}>
+            <span style={{ fontSize: 8, fontFamily: "var(--m)", color: "var(--t4)", width: 12 }}>{i + 1}</span>
+            <span style={{ fontSize: 9, fontWeight: 600, color: "var(--t1)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "var(--h)" }}>{p.name}</span>
+            {p.days21 && <MicroStrip days={p.days21} width={36} height={10} trend={p.trend} />}
+            <span style={{ fontSize: 9, fontWeight: 700, fontFamily: "var(--m)", color: "#00C853" }}>+{p.trend.pct}%</span>
+          </div>
+        ))}
+      </div>
+      {/* Losers */}
+      <div style={{ flex: 1, padding: "6px 12px" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 4 }}>
+          <ChevronDown size={8} color="#FF1744" />
+          <span style={{ fontSize: 7, fontWeight: 700, fontFamily: "var(--m)", color: "#FF1744", letterSpacing: ".08em" }}>LOSERS</span>
+        </div>
+        {losers.map((p, i) => (
+          <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 6, padding: "2px 0", animation: `fi .2s ease ${i * 0.04}s both` }}>
+            <span style={{ fontSize: 8, fontFamily: "var(--m)", color: "var(--t4)", width: 12 }}>{i + 1}</span>
+            <span style={{ fontSize: 9, fontWeight: 600, color: "var(--t1)", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", fontFamily: "var(--h)" }}>{p.name}</span>
+            {p.days21 && <MicroStrip days={p.days21} width={36} height={10} trend={p.trend} />}
+            <span style={{ fontSize: 9, fontWeight: 700, fontFamily: "var(--m)", color: "#FF1744" }}>-{p.trend.pct}%</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ────────────────────────────────────────────
+// Event Feed Card — transaction-style sidebar entry
 // ────────────────────────────────────────────
 function EventFeedCard({ event, index }) {
   const isNew = event.discovered_at && (Date.now() - new Date(event.discovered_at).getTime()) < 600_000;
-  const traction = event.upvotes > 0 ? `${event.upvotes}pts` : event.stars > 0 ? `${event.stars >= 1000 ? (event.stars / 1000).toFixed(1) + "k" : event.stars}\u2605` : event.downloads > 0 ? `${event.downloads}dl` : null;
+  const traction = event.upvotes > 0 ? `${event.upvotes}` : event.stars > 0 ? `${event.stars >= 1000 ? (event.stars / 1000).toFixed(1) + "k" : event.stars}\u2605` : event.downloads > 0 ? `${event.downloads}` : null;
+
+  // Positive = release, high upvotes. Neutral otherwise.
+  const isPositive = (event.source === "github-releases") || (event.upvotes > 10) || (event.stars > 50);
+  const borderColor = isNew ? (isPositive ? "#00C853" : "#FF1744") : "var(--b1)";
 
   return (
     <div style={{
-      padding: "5px 8px", borderRadius: 4, background: "var(--s1)",
-      border: "1px solid var(--b1)", borderLeft: isNew ? "2px solid var(--g)" : "1px solid var(--b1)",
-      animation: `fi .25s ease ${Math.min(index * 0.03, 0.2)}s both`, transition: "all .15s",
+      padding: "4px 6px", borderRadius: 3, background: "rgba(255,255,255,.015)",
+      borderLeft: `2px solid ${borderColor}`,
+      animation: `fi .2s ease ${Math.min(index * 0.02, 0.15)}s both`, transition: "all .15s",
     }} className="feed-card">
-      <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 2 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
         <SourceBadge source={event.source} />
-        {isNew && <span style={{ width: 3, height: 3, borderRadius: "50%", background: "var(--g)", animation: "lp 2s ease-in-out infinite" }} />}
-        <span style={{ fontSize: 10, fontWeight: 700, color: "var(--t1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{event.name}</span>
-        <span style={{ fontSize: 8, fontFamily: "var(--m)", color: "var(--t4)", flexShrink: 0 }}>
+        <span style={{ fontSize: 9, fontWeight: 700, color: "var(--t1)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1, fontFamily: "var(--h)" }}>{event.name}</span>
+        {traction && <span style={{ fontSize: 9, fontWeight: 700, fontFamily: "var(--m)", color: isPositive ? "#00C853" : "var(--t2)", flexShrink: 0 }}>{traction}</span>}
+        <span style={{ fontSize: 7, fontFamily: "var(--m)", color: "var(--t4)", flexShrink: 0 }}>
           {event.discovered_at ? timeAgo(event.discovered_at) : ""}
         </span>
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-        {traction && <span style={{ fontSize: 9, fontWeight: 600, fontFamily: "var(--m)", color: "var(--t2)" }}>{traction}</span>}
-        {event.category && <span style={{ fontSize: 8, fontFamily: "var(--m)", color: "var(--t4)" }}>{event.category}</span>}
-        {event.language && <span style={{ fontSize: 8, fontFamily: "var(--m)", color: "var(--t4)" }}>{event.language}</span>}
       </div>
     </div>
   );
@@ -831,7 +1031,6 @@ export default function ActivityClient() {
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (!data?.discoveries) return;
-        // Group by matched product for composite scoring
         const signals = {};
         for (const d of data.discoveries) {
           const pid = matchDiscovery(d, signalIndex);
@@ -841,7 +1040,6 @@ export default function ActivityClient() {
           if (bucket && signals[pid][bucket]) signals[pid][bucket].push(d);
         }
         setScannerSignals(signals);
-        // Use same data for event feed (sorted by discovered_at)
         const sorted = [...data.discoveries].sort((a, b) => new Date(b.discovered_at || 0) - new Date(a.discovered_at || 0));
         setEventFeed(sorted.slice(0, 100));
       })
@@ -860,7 +1058,6 @@ export default function ActivityClient() {
           if (prev.some((d) => (d.id || d.external_id) === id)) return prev;
           return [payload.new, ...prev].slice(0, 100);
         });
-        // Also update scanner signals if it matches a product
         const pid = matchDiscovery(payload.new, signalIndex);
         if (pid) {
           setScannerSignals((prev) => {
@@ -931,12 +1128,12 @@ export default function ActivityClient() {
     return items;
   }, [enrichedProducts, cat, q]);
 
-  // Top movers
+  // Top movers for marquee
   const topMovers = useMemo(() => {
     return enrichedProducts
       .filter((p) => p.status === "loaded" && p.trend && p.total4wk > 0)
       .sort((a, b) => (b.trend?.pct || 0) - (a.trend?.pct || 0))
-      .slice(0, 12);
+      .slice(0, 20);
   }, [enrichedProducts]);
 
   // ── Category pulse aggregation ──
@@ -958,7 +1155,6 @@ export default function ActivityClient() {
   const filteredFeed = useMemo(() => {
     let items = eventFeed;
     if (feedSource !== "ALL") {
-      // Allow matching source variants (e.g. "github" matches "github-trending", "github-momentum")
       items = items.filter((e) => e.source === feedSource || e.source?.startsWith(feedSource));
     }
     const seen = new Set();
@@ -977,122 +1173,141 @@ export default function ActivityClient() {
   void tick;
 
   return (
-    <div style={{ "--bg": "#0A0B10", "--s1": "#12141C", "--s2": "#1A1D28", "--b1": "rgba(255,255,255,.06)", "--b2": "rgba(255,255,255,.10)", "--b3": "rgba(255,255,255,.14)", "--t1": "#F2F2F7", "--t2": "rgba(242,242,247,.6)", "--t3": "rgba(242,242,247,.35)", "--t4": "rgba(242,242,247,.2)", "--g": "#2DD4BF", "--gg": "rgba(45,212,191,.1)", "--gd": "rgba(45,212,191,.04)", "--up": "#16A34A", "--dn": "#DC2626", "--m": "'SF Mono', 'JetBrains Mono', 'Fira Code', monospace", "--f": "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif", minHeight: "100vh", background: "var(--bg)", color: "var(--t1)", fontFamily: "var(--f)" }}>
+    <div style={{ "--bg": "#0A0B10", "--s1": "#12141C", "--s2": "#1A1D28", "--b1": "rgba(255,255,255,.06)", "--b2": "rgba(255,255,255,.10)", "--b3": "rgba(255,255,255,.14)", "--t1": "#F2F2F7", "--t2": "rgba(242,242,247,.6)", "--t3": "rgba(242,242,247,.35)", "--t4": "rgba(242,242,247,.2)", "--g": "#2DD4BF", "--gg": "rgba(45,212,191,.1)", "--gd": "rgba(45,212,191,.04)", "--up": "#00C853", "--dn": "#FF1744", "--m": "'JetBrains Mono', 'SF Mono', 'Fira Code', monospace", "--h": "'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif", "--f": "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif", minHeight: "100vh", background: "var(--bg)", color: "var(--t1)", fontFamily: "var(--f)" }}>
 
       <style suppressHydrationWarning>{`
-        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
-        @keyframes fi { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: translateY(0) } }
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700');
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800');
+        @keyframes fi { from { opacity: 0; transform: translateY(6px) } to { opacity: 1; transform: translateY(0) } }
         @keyframes lp { 0%,100% { opacity: .35 } 50% { opacity: 1 } }
         @keyframes scan { 0% { transform: translateX(-100%) } 100% { transform: translateX(400%) } }
+        @keyframes marquee {
+          0% { transform: translateX(0) }
+          100% { transform: translateX(-50%) }
+        }
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        ::selection { background: rgba(45,212,191,.12); }
-        ::-webkit-scrollbar { width: 4px; height: 4px; }
+        ::selection { background: rgba(0,200,83,.12); }
+        ::-webkit-scrollbar { width: 3px; height: 3px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,.06); border-radius: 2px; }
         ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,.12); }
         .pulse-row:hover { background: rgba(255,255,255,.02) !important; }
-        .feed-card:hover { border-color: var(--b2) !important; background: var(--s2) !important; }
+        .feed-card:hover { background: rgba(255,255,255,.03) !important; }
         .pill { transition: all .15s; cursor: pointer; user-select: none; }
         .pill:hover { background: rgba(255,255,255,.06) !important; }
-        .pill.on { background: var(--gd) !important; border-color: var(--gg) !important; color: var(--g) !important; }
+        .pill.on { background: rgba(0,200,83,.06) !important; border-color: rgba(0,200,83,.15) !important; color: #00C853 !important; }
         .link-hover { transition: all .15s; text-decoration: none; }
         .link-hover:hover { color: var(--g) !important; }
         .movers-ribbon::-webkit-scrollbar { display: none; }
         .movers-ribbon { -ms-overflow-style: none; scrollbar-width: none; }
+        .marquee-track { animation: marquee 30s linear infinite; }
+        .marquee-track:hover { animation-play-state: paused; }
         @media (max-width: 1024px) {
           .pulse-layout { flex-direction: column !important; }
-          .pulse-sidebar { width: 100% !important; position: relative !important; top: auto !important; border-left: none !important; border-bottom: 1px solid var(--b1) !important; height: auto !important; max-height: 220px !important; }
+          .pulse-sidebar { width: 100% !important; position: relative !important; top: auto !important; border-left: none !important; border-bottom: 1px solid var(--b1) !important; height: auto !important; max-height: 200px !important; }
           .pulse-sidebar .feed-list { flex-direction: row !important; overflow-x: auto !important; overflow-y: hidden !important; }
           .pulse-sidebar .feed-list > div { min-width: 200px !important; flex-shrink: 0 !important; }
           .cat-pulse-strip { display: none !important; }
+          .gl-panel { display: none !important; }
         }
         @media (max-width: 768px) {
-          .pulse-header { padding: 0 12px !important; }
-          .pulse-toolbar { padding: 6px 12px !important; flex-direction: column !important; gap: 6px !important; }
+          .pulse-header { padding: 0 8px !important; }
+          .pulse-toolbar { padding: 6px 8px !important; flex-direction: column !important; gap: 6px !important; }
           .pulse-matrix { padding: 0 !important; }
-          .pulse-row { padding: 5px 6px 5px 0 !important; }
-          .row-name { width: 100px !important; }
+          .pulse-row { padding: 4px 4px 4px 0 !important; }
+          .row-name { width: 90px !important; }
           .row-spectrogram { display: none !important; }
-          .movers-ribbon { padding: 0 12px !important; }
+          .row-mini-chart { display: none !important; }
+          .row-pct { display: none !important; }
+          .row-vol { display: none !important; }
+          .movers-ribbon { padding: 0 8px !important; }
         }
       `}</style>
 
       {/* ─── HEADER ─── */}
-      <header className="pulse-header" style={{ padding: "0 24px", height: 44, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--b1)", background: "rgba(10,11,16,.92)", backdropFilter: "blur(24px) saturate(180%)", position: "sticky", top: 0, zIndex: 100 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <a href="/dashboard" style={{ display: "flex", alignItems: "center", gap: 6, textDecoration: "none", color: "var(--t1)" }}>
-            <span style={{ fontSize: 13, fontWeight: 800, fontFamily: "var(--m)", letterSpacing: "-.02em" }}>
+      <header className="pulse-header" style={{ padding: "0 20px", height: 42, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--b1)", background: "rgba(10,11,16,.94)", backdropFilter: "blur(24px) saturate(180%)", position: "sticky", top: 0, zIndex: 100 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <a href="/dashboard" style={{ display: "flex", alignItems: "center", gap: 5, textDecoration: "none", color: "var(--t1)" }}>
+            <span style={{ fontSize: 13, fontWeight: 800, fontFamily: "var(--h)", letterSpacing: "-.02em" }}>
               agent<span style={{ color: "var(--g)" }}>screener</span>
             </span>
           </a>
-          <div style={{ height: 14, width: 1, background: "var(--b2)" }} />
-          <span style={{ fontSize: 10, fontWeight: 700, fontFamily: "var(--m)", color: "var(--g)", letterSpacing: ".1em" }}>PULSE</span>
+          <div style={{ height: 12, width: 1, background: "var(--b2)" }} />
+          <span style={{ fontSize: 9, fontWeight: 700, fontFamily: "var(--m)", color: "#00C853", letterSpacing: ".1em" }}>PULSE</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
           {progress.total > 0 && (
-            <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "2px 8px", borderRadius: 3, background: "rgba(255,255,255,.02)", border: "1px solid rgba(255,255,255,.04)" }}>
-              <div style={{ width: 28, height: 2, borderRadius: 1, background: "rgba(255,255,255,.06)", overflow: "hidden" }}>
-                <div style={{ width: `${pctDone}%`, height: "100%", borderRadius: 1, background: progress.done < progress.total ? "var(--g)" : "rgba(255,255,255,.12)", transition: "width .3s" }} />
+            <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "2px 6px", borderRadius: 3, background: "rgba(255,255,255,.02)", border: "1px solid rgba(255,255,255,.04)" }}>
+              <div style={{ width: 24, height: 2, borderRadius: 1, background: "rgba(255,255,255,.06)", overflow: "hidden" }}>
+                <div style={{ width: `${pctDone}%`, height: "100%", borderRadius: 1, background: progress.done < progress.total ? "#00C853" : "rgba(255,255,255,.12)", transition: "width .3s" }} />
               </div>
-              <span style={{ fontSize: 8, fontFamily: "var(--m)", color: "var(--t4)" }}>{progress.done}/{progress.total}</span>
+              <span style={{ fontSize: 7, fontFamily: "var(--m)", color: "var(--t4)" }}>{progress.done}/{progress.total}</span>
             </div>
           )}
           {signalCount > 0 && (
-            <span style={{ fontSize: 8, fontFamily: "var(--m)", color: "var(--t4)", padding: "2px 6px", borderRadius: 3, background: "rgba(255,255,255,.02)", border: "1px solid rgba(255,255,255,.04)" }}>
-              {signalCount} signals
+            <span style={{ fontSize: 7, fontFamily: "var(--m)", color: "var(--t4)", padding: "2px 5px", borderRadius: 3, background: "rgba(255,255,255,.02)", border: "1px solid rgba(255,255,255,.04)" }}>
+              {signalCount} sig
             </span>
           )}
-          <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "2px 8px", borderRadius: 3, background: "rgba(255,255,255,.02)", border: "1px solid rgba(255,255,255,.04)" }}>
-            <span style={{ width: 4, height: 4, borderRadius: "50%", background: "#2DD4BF", animation: "lp 2s ease-in-out infinite" }} />
-            <span style={{ fontSize: 8, fontWeight: 600, color: "var(--t4)", fontFamily: "var(--m)", letterSpacing: ".06em" }}>LIVE</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 3, padding: "2px 6px", borderRadius: 3, background: "rgba(255,255,255,.02)", border: "1px solid rgba(255,255,255,.04)" }}>
+            <span style={{ width: 4, height: 4, borderRadius: "50%", background: "#00C853", animation: "lp 2s ease-in-out infinite" }} />
+            <span style={{ fontSize: 7, fontWeight: 600, color: "var(--t4)", fontFamily: "var(--m)", letterSpacing: ".06em" }}>LIVE</span>
           </div>
-          <a href="/dashboard" className="link-hover" style={{ fontSize: 9, fontWeight: 600, color: "var(--t4)", padding: "3px 8px", borderRadius: 3, border: "1px solid var(--b1)", textDecoration: "none", fontFamily: "var(--m)" }}>Dashboard</a>
-          <a href="/screener" className="link-hover" style={{ fontSize: 9, fontWeight: 600, color: "var(--t4)", padding: "3px 8px", borderRadius: 3, border: "1px solid var(--b1)", textDecoration: "none", fontFamily: "var(--m)" }}>Screener</a>
+          <a href="/dashboard" className="link-hover" style={{ fontSize: 8, fontWeight: 600, color: "var(--t4)", padding: "2px 6px", borderRadius: 3, border: "1px solid var(--b1)", textDecoration: "none", fontFamily: "var(--m)" }}>Dashboard</a>
+          <a href="/screener" className="link-hover" style={{ fontSize: 8, fontWeight: 600, color: "var(--t4)", padding: "2px 6px", borderRadius: 3, border: "1px solid var(--b1)", textDecoration: "none", fontFamily: "var(--m)" }}>Screener</a>
         </div>
       </header>
 
-      {/* ─── TOP MOVERS ─── */}
-      <TopMoversRibbon movers={topMovers} />
+      {/* ─── MARQUEE TICKER ─── */}
+      <MarqueeTicker movers={topMovers} />
 
-      {/* ─── CATEGORY PULSE ─── */}
+      {/* ─── CATEGORY SECTORS ─── */}
       <div className="cat-pulse-strip">
         <CategoryPulseStrip categories={categoryPulse} activeCat={cat} onSelect={setCat} />
       </div>
 
-      {/* ─── MAIN LAYOUT ─── */}
-      <div className="pulse-layout" style={{ display: "flex", position: "relative", zIndex: 1, minHeight: "calc(100vh - 110px)" }}>
+      {/* ─── GAINERS & LOSERS ─── */}
+      <div className="gl-panel">
+        <GainersLosersPanel enriched={enrichedProducts} />
+      </div>
 
-        {/* ─── LEFT: SPECTROGRAM MATRIX ─── */}
+      {/* ─── MAIN LAYOUT ─── */}
+      <div className="pulse-layout" style={{ display: "flex", position: "relative", zIndex: 1, minHeight: "calc(100vh - 140px)" }}>
+
+        {/* ─── LEFT: MATRIX ─── */}
         <main style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column" }}>
 
           {/* Toolbar */}
-          <div className="pulse-toolbar" style={{ padding: "8px 16px", display: "flex", alignItems: "center", gap: 6, borderBottom: "1px solid var(--b1)", flexWrap: "wrap" }}>
+          <div className="pulse-toolbar" style={{ padding: "6px 12px", display: "flex", alignItems: "center", gap: 5, borderBottom: "1px solid var(--b1)", flexWrap: "wrap" }}>
             <div style={{ display: "flex", gap: 3, flex: 1, flexWrap: "wrap" }}>
-              <button className={`pill${cat === "All" ? " on" : ""}`} onClick={() => setCat("All")} style={{ padding: "2px 8px", borderRadius: 3, background: "rgba(255,255,255,.02)", border: "1px solid var(--b1)", color: "var(--t3)", fontSize: 9, fontWeight: 600, fontFamily: "var(--m)" }}>
+              <button className={`pill${cat === "All" ? " on" : ""}`} onClick={() => setCat("All")} style={{ padding: "2px 7px", borderRadius: 3, background: "rgba(255,255,255,.02)", border: "1px solid var(--b1)", color: "var(--t3)", fontSize: 8, fontWeight: 600, fontFamily: "var(--m)" }}>
                 All ({products.length})
               </button>
               {topCats.map((c) => (
-                <button key={c} className={`pill${cat === c ? " on" : ""}`} onClick={() => setCat(c)} style={{ padding: "2px 8px", borderRadius: 3, background: "rgba(255,255,255,.02)", border: "1px solid var(--b1)", color: "var(--t3)", fontSize: 9, fontWeight: 600, fontFamily: "var(--m)", whiteSpace: "nowrap" }}>
+                <button key={c} className={`pill${cat === c ? " on" : ""}`} onClick={() => setCat(c)} style={{ padding: "2px 7px", borderRadius: 3, background: "rgba(255,255,255,.02)", border: "1px solid var(--b1)", color: "var(--t3)", fontSize: 8, fontWeight: 600, fontFamily: "var(--m)", whiteSpace: "nowrap" }}>
                   {c}
                 </button>
               ))}
             </div>
             <div style={{ position: "relative" }}>
               <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Filter..."
-                style={{ width: 130, padding: "4px 8px 4px 22px", borderRadius: 3, border: "1px solid var(--b1)", background: "rgba(255,255,255,.02)", color: "var(--t1)", fontSize: 10, fontFamily: "var(--m)", outline: "none" }} />
-              <span style={{ position: "absolute", left: 7, top: "50%", transform: "translateY(-50%)", fontSize: 9, color: "var(--t4)", pointerEvents: "none" }}>&#8981;</span>
+                style={{ width: 120, padding: "3px 7px 3px 20px", borderRadius: 3, border: "1px solid var(--b1)", background: "rgba(255,255,255,.02)", color: "var(--t1)", fontSize: 9, fontFamily: "var(--m)", outline: "none" }} />
+              <span style={{ position: "absolute", left: 6, top: "50%", transform: "translateY(-50%)", fontSize: 8, color: "var(--t4)", pointerEvents: "none" }}>&#8981;</span>
             </div>
           </div>
 
           {/* Column headers */}
-          <div style={{ display: "flex", alignItems: "center", padding: "5px 16px 3px 0", borderBottom: "1px solid rgba(255,255,255,.04)" }}>
-            <span style={{ width: 32, textAlign: "right", fontSize: 7, fontFamily: "var(--m)", color: "var(--t4)", letterSpacing: ".06em", paddingRight: 10 }}>#</span>
-            <span className="row-name" style={{ width: 160, fontSize: 7, fontFamily: "var(--m)", color: "var(--t4)", letterSpacing: ".06em", paddingRight: 10 }}>PRODUCT</span>
-            <span className="row-spectrogram" style={{ flex: 1, fontSize: 7, fontFamily: "var(--m)", color: "var(--t4)", letterSpacing: ".06em", paddingRight: 10 }}>21-DAY ACTIVITY</span>
-            <span style={{ width: 48, textAlign: "right", fontSize: 7, fontFamily: "var(--m)", color: "var(--t4)", letterSpacing: ".06em", paddingRight: 10 }}>PULSE</span>
-            <span style={{ width: 40, textAlign: "right", fontSize: 7, fontFamily: "var(--m)", color: "var(--t4)", letterSpacing: ".06em", paddingRight: 10 }}>TODAY</span>
-            <span style={{ width: 48, textAlign: "right", fontSize: 7, fontFamily: "var(--m)", color: "var(--t4)", letterSpacing: ".06em", paddingRight: 10 }}>4WK</span>
-            <span style={{ width: 56, textAlign: "right", fontSize: 7, fontFamily: "var(--m)", color: "var(--t4)", letterSpacing: ".06em" }}>TREND</span>
+          <div style={{ display: "flex", alignItems: "center", padding: "4px 12px 3px 0", borderBottom: "1px solid rgba(255,255,255,.04)" }}>
+            <span style={{ width: 28, textAlign: "right", fontSize: 7, fontFamily: "var(--m)", color: "var(--t4)", letterSpacing: ".06em", paddingRight: 8 }}>#</span>
+            <span className="row-name" style={{ width: 140, fontSize: 7, fontFamily: "var(--m)", color: "var(--t4)", letterSpacing: ".06em", paddingRight: 6 }}>NAME</span>
+            <span className="row-mini-chart" style={{ width: 64, fontSize: 7, fontFamily: "var(--m)", color: "var(--t4)", letterSpacing: ".06em", paddingRight: 6 }}>CHART</span>
+            <span className="row-spectrogram" style={{ flex: 1, fontSize: 7, fontFamily: "var(--m)", color: "var(--t4)", letterSpacing: ".06em", paddingRight: 8 }}>21-DAY</span>
+            <span style={{ width: 44, textAlign: "right", fontSize: 7, fontFamily: "var(--m)", color: "var(--t4)", letterSpacing: ".06em", paddingRight: 6 }}>PULSE</span>
+            <span className="row-pct" style={{ width: 44, textAlign: "right", fontSize: 7, fontFamily: "var(--m)", color: "var(--t4)", letterSpacing: ".06em", paddingRight: 6 }}>1D</span>
+            <span className="row-pct" style={{ width: 44, textAlign: "right", fontSize: 7, fontFamily: "var(--m)", color: "var(--t4)", letterSpacing: ".06em", paddingRight: 6 }}>1W</span>
+            <span className="row-pct" style={{ width: 48, textAlign: "right", fontSize: 7, fontFamily: "var(--m)", color: "var(--t4)", letterSpacing: ".06em", paddingRight: 6 }}>4W</span>
+            <span className="row-vol" style={{ width: 40, textAlign: "right", fontSize: 7, fontFamily: "var(--m)", color: "var(--t4)", letterSpacing: ".06em", paddingRight: 6 }}>VOL</span>
+            <span style={{ width: 32, textAlign: "right", fontSize: 7, fontFamily: "var(--m)", color: "var(--t4)", letterSpacing: ".06em" }}>SIG</span>
           </div>
 
           {/* Matrix rows */}
@@ -1108,46 +1323,39 @@ export default function ActivityClient() {
           </div>
 
           {/* Footer */}
-          <div style={{ padding: "6px 16px", borderTop: "1px solid var(--b1)", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
-            <span style={{ fontSize: 8, color: "var(--t4)", fontFamily: "var(--m)" }}>
-              {sorted.length} products · {loadedCount} loaded · {signalCount} with signals
-              {progress.errors > 0 && <span style={{ color: "var(--dn)" }}> · {progress.errors} err</span>}
+          <div style={{ padding: "5px 12px", borderTop: "1px solid var(--b1)", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
+            <span style={{ fontSize: 7, color: "var(--t4)", fontFamily: "var(--m)" }}>
+              {sorted.length} products {"\u00B7"} {loadedCount} loaded {"\u00B7"} {signalCount} signals
+              {progress.errors > 0 && <span style={{ color: "var(--dn)" }}> {"\u00B7"} {progress.errors} err</span>}
             </span>
-            <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
-              <span style={{ fontSize: 7, color: "var(--t4)", fontFamily: "var(--m)" }}>Less</span>
-              {LEVELS.map((c, i) => (
-                <span key={i} style={{ width: 5, height: 5, borderRadius: 1, background: c, display: "inline-block" }} />
-              ))}
-              <span style={{ fontSize: 7, color: "var(--t4)", fontFamily: "var(--m)" }}>More</span>
-            </div>
+            <span style={{ fontSize: 7, color: "var(--t4)", fontFamily: "var(--m)" }}>Terminal Pulse v3</span>
           </div>
         </main>
 
-        {/* ─── RIGHT: CROSS-SOURCE EVENT STREAM ─── */}
-        <aside className="pulse-sidebar" style={{ width: 250, flexShrink: 0, borderLeft: "1px solid var(--b1)", background: "rgba(10,11,16,.5)", position: "sticky", top: 44, height: "calc(100vh - 110px)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          <div style={{ padding: "8px 10px 6px", borderBottom: "1px solid var(--b1)", flexShrink: 0 }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 5 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 5 }}>
-                <span style={{ width: 4, height: 4, borderRadius: "50%", background: "var(--g)", animation: "lp 2s ease-in-out infinite" }} />
-                <span style={{ fontSize: 8, fontWeight: 700, fontFamily: "var(--m)", letterSpacing: ".1em", color: "var(--t3)" }}>EVENTS</span>
+        {/* ─── RIGHT: TRANSACTION FEED ─── */}
+        <aside className="pulse-sidebar" style={{ width: 240, flexShrink: 0, borderLeft: "1px solid var(--b1)", background: "rgba(10,11,16,.5)", position: "sticky", top: 42, height: "calc(100vh - 140px)", display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          <div style={{ padding: "6px 8px 5px", borderBottom: "1px solid var(--b1)", flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <span style={{ width: 4, height: 4, borderRadius: "50%", background: "#00C853", animation: "lp 2s ease-in-out infinite" }} />
+                <span style={{ fontSize: 7, fontWeight: 700, fontFamily: "var(--m)", letterSpacing: ".1em", color: "var(--t3)" }}>TRANSACTIONS</span>
               </div>
-              <span style={{ fontSize: 8, fontFamily: "var(--m)", color: "var(--t4)" }}>{filteredFeed.length}</span>
+              <span style={{ fontSize: 7, fontFamily: "var(--m)", color: "var(--t4)" }}>{filteredFeed.length}</span>
             </div>
-            {/* Source filter pills */}
             <div style={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
               {FEED_SOURCES.map((s) => (
                 <button key={s.key} className={`pill${feedSource === s.key ? " on" : ""}`}
                   onClick={() => setFeedSource(s.key)}
-                  style={{ padding: "1px 5px", borderRadius: 2, background: "rgba(255,255,255,.02)", border: "1px solid var(--b1)", color: "var(--t4)", fontSize: 7, fontWeight: 600, fontFamily: "var(--m)" }}>
+                  style={{ padding: "1px 4px", borderRadius: 2, background: "rgba(255,255,255,.02)", border: "1px solid var(--b1)", color: "var(--t4)", fontSize: 7, fontWeight: 600, fontFamily: "var(--m)" }}>
                   {s.label}
                 </button>
               ))}
             </div>
           </div>
-          <div className="feed-list" style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "4px 6px", display: "flex", flexDirection: "column", gap: 3 }}>
+          <div className="feed-list" style={{ flex: 1, overflowY: "auto", overflowX: "hidden", padding: "3px 5px", display: "flex", flexDirection: "column", gap: 2 }}>
             {filteredFeed.length === 0 ? (
               <div style={{ padding: "28px 0", textAlign: "center" }}>
-                <div style={{ fontSize: 9, color: "var(--t4)", fontFamily: "var(--m)", lineHeight: 1.6 }}>
+                <div style={{ fontSize: 8, color: "var(--t4)", fontFamily: "var(--m)", lineHeight: 1.6 }}>
                   {progress.done < progress.total ? "Scanning..." : "No events yet"}
                 </div>
               </div>
