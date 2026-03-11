@@ -29,6 +29,11 @@ import { scanGitHubReleases } from "@/lib/scanner/github-releases";
 import { scanStackOverflow } from "@/lib/scanner/stackoverflow";
 import { scanGitHubDiscussions } from "@/lib/scanner/github-discussions";
 import { scanMastodon } from "@/lib/scanner/mastodon";
+import { scanTwitter } from "@/lib/scanner/twitter";
+import { scanGooglePlay } from "@/lib/scanner/google-play";
+import { scanChromeWebStore } from "@/lib/scanner/chrome-webstore";
+import { scanAppStore } from "@/lib/scanner/appstore";
+import { scanFunding } from "@/lib/scanner/funding";
 import { validateProduct } from "@/lib/scanner/product-filter";
 
 // ── Batch definitions ──
@@ -37,6 +42,7 @@ const BATCHES = {
   batch2: ["npm", "reddit", "producthunt", "arxiv"],
   batch3: ["github-trending", "github-momentum", "devto", "lobsters"],
   batch4: ["github-releases", "stackoverflow", "github-discussions", "mastodon"],
+  batch5: ["twitter", "google-play", "chrome-webstore", "appstore", "funding"],
 };
 
 function getSupabaseAdmin() {
@@ -52,6 +58,56 @@ async function batchUpsert(supabase, discoveries) {
     .from("scanner_discoveries")
     .upsert(discoveries, { onConflict: "source,external_id" });
   if (error) console.log(`[Scanner] Upsert error: ${error.message}`);
+}
+
+async function snapshotMetrics(supabase, discoveries) {
+  if (!discoveries.length) return;
+
+  // Get the actual DB rows for these discoveries (we need their UUIDs)
+  const externalIds = discoveries.map((d) => d.external_id);
+  const { data: rows } = await supabase
+    .from("scanner_discoveries")
+    .select("id, external_id, stars, forks, downloads, upvotes")
+    .in("external_id", externalIds.slice(0, 100));
+
+  if (!rows?.length) return;
+
+  // Only snapshot items that have metrics worth tracking
+  const withMetrics = rows.filter(
+    (r) => (r.stars || 0) + (r.downloads || 0) + (r.upvotes || 0) > 0
+  );
+  if (!withMetrics.length) return;
+
+  // Rate limit: check if we already snapshotted recently (within 1 hour)
+  const ids = withMetrics.map((r) => r.id);
+  const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+  const { data: recent } = await supabase
+    .from("discovery_snapshots")
+    .select("discovery_id")
+    .in("discovery_id", ids.slice(0, 50))
+    .gte("snapshot_at", oneHourAgo);
+
+  const recentSet = new Set((recent || []).map((r) => r.discovery_id));
+  const toSnapshot = withMetrics.filter((r) => !recentSet.has(r.id));
+
+  if (!toSnapshot.length) return;
+
+  const snapshots = toSnapshot.map((r) => ({
+    discovery_id: r.id,
+    stars: r.stars || 0,
+    forks: r.forks || 0,
+    downloads: r.downloads || 0,
+    upvotes: r.upvotes || 0,
+  }));
+
+  // Insert in batches
+  for (let i = 0; i < snapshots.length; i += 50) {
+    await supabase
+      .from("discovery_snapshots")
+      .insert(snapshots.slice(i, i + 50));
+  }
+
+  console.log(`[Scanner] Snapshotted ${snapshots.length} discoveries`);
 }
 
 async function updateState(supabase, source, updates) {
@@ -201,6 +257,36 @@ async function runSource(sourceName, stateMap, supabase) {
         stateUpdate = { last_scan_at: r.newLastScanAt };
         break;
       }
+      case "twitter": {
+        const r = await scanTwitter(state.last_event_id);
+        discoveries = r.discoveries;
+        stateUpdate = { last_scan_at: new Date().toISOString(), last_event_id: r.newLastTweetId };
+        break;
+      }
+      case "google-play": {
+        const r = await scanGooglePlay(state.last_scan_at);
+        discoveries = r.discoveries;
+        stateUpdate = { last_scan_at: r.newLastScanAt };
+        break;
+      }
+      case "chrome-webstore": {
+        const r = await scanChromeWebStore(state.last_scan_at);
+        discoveries = r.discoveries;
+        stateUpdate = { last_scan_at: r.newLastScanAt };
+        break;
+      }
+      case "appstore": {
+        const r = await scanAppStore(state.last_scan_at);
+        discoveries = r.discoveries;
+        stateUpdate = { last_scan_at: r.newLastScanAt };
+        break;
+      }
+      case "funding": {
+        const r = await scanFunding(state.last_scan_at);
+        discoveries = r.discoveries;
+        stateUpdate = { last_scan_at: r.newLastScanAt };
+        break;
+      }
     }
 
     // Apply product filter — reject blog posts, discussions, non-products
@@ -209,6 +295,12 @@ async function runSource(sourceName, stateMap, supabase) {
 
     // Persist results
     await batchUpsert(supabase, discoveries);
+
+    // Snapshot metrics for sparklines/analytics (hourly rate limit)
+    await snapshotMetrics(supabase, discoveries).catch((e) =>
+      console.log(`[Scanner] Snapshot error: ${e.message}`)
+    );
+
     await updateState(supabase, sourceName, {
       ...stateUpdate,
       items_found_total: (state.items_found_total || 0) + discoveries.length,
