@@ -14,6 +14,21 @@ export default function AuthModal({ onClose, initialMode = "signin" }) {
 
   const handleSubmit = async () => {
     setError("");
+
+    // Client-side validation
+    if (!email || !email.includes("@")) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+    if (!password || password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
+    if (mode === "signup" && !name?.trim()) {
+      setError("Please enter your name.");
+      return;
+    }
+
     setLoading(true);
     try {
       if (mode === "signin") {
@@ -21,8 +36,15 @@ export default function AuthModal({ onClose, initialMode = "signin" }) {
         if (err) { setError(err.message); setLoading(false); return; }
         onClose();
       } else {
-        const { error: err } = await signUpWithEmail(email, password, name);
+        const { data, error: err } = await signUpWithEmail(email, password, name);
         if (err) { setError(err.message); setLoading(false); return; }
+        // Supabase returns user with empty identities if email already registered
+        // (to prevent email enumeration — signUp doesn't error)
+        if (data?.user?.identities?.length === 0) {
+          setError("An account with this email already exists. Try signing in instead.");
+          setLoading(false);
+          return;
+        }
         setCheckEmail(true);
       }
     } catch (e) {
