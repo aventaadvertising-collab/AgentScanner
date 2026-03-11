@@ -28,6 +28,23 @@ const SORTS = [
 
 // Micro components imported from @/app/components/ProductDetail
 
+// Mini sparkline from real commit activity weeks data
+function MiniCommitSpark({ weeks, w = 74, h = 22 }) {
+  if (!weeks || weeks.length < 2) return <div style={{ width: w, height: h }} />;
+  const last8 = weeks.slice(-8);
+  const vals = last8.map(wk => wk.t || 0);
+  const max = Math.max(...vals, 1);
+  const pts = vals.map((v, i) => `${(i / (vals.length - 1)) * w},${h - (v / max) * (h - 2) - 1}`).join(" ");
+  const trending = vals.length >= 2 && vals[vals.length - 1] > vals[vals.length - 2];
+  const color = trending ? "var(--up)" : "var(--t3)";
+  return (
+    <svg width={w} height={h} style={{ display: "block" }}>
+      <polyline points={pts} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" opacity={0.7} />
+      <circle cx={(vals.length - 1) / (vals.length - 1) * w} cy={h - (vals[vals.length - 1] / max) * (h - 2) - 1} r={2} fill={color} />
+    </svg>
+  );
+}
+
 function SentiBar({ s }) {
   if (!s) return <span style={{ color: "var(--t3)" }}>—</span>;
   const c = s >= 80 ? "var(--up)" : s >= 60 ? "var(--y)" : "var(--dn)";
@@ -187,7 +204,7 @@ export default function AgentScreener() {
   const user = auth?.user;
   const supabase = auth?.supabase;
   const [cat, setCat] = useState("All");
-  const [sort, setSort] = useState("name");
+  const [sort, setSort] = useState("githubStars");
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(null);
   const [apply, setApply] = useState(false);
@@ -350,13 +367,17 @@ export default function AgentScreener() {
       });
   }, [enriched, cat, sort, q, wlFilter, wl]);
 
-  // Top movers: products with most GitHub stars (or newest if no pipeline data)
+  // Top movers: products with best star velocity, fallback to most stars
   const movers = useMemo(() => {
+    const withVelocity = enriched.filter(p => p.starVelocity > 0);
+    if (withVelocity.length >= 6) {
+      return [...withVelocity].sort((a, b) => (b.starVelocity || 0) - (a.starVelocity || 0)).slice(0, 6);
+    }
     const withStars = enriched.filter(p => p.githubStars > 0);
     if (withStars.length >= 6) {
-      return [...withStars].sort((a, b) => (b.starVelocity || 0) - (a.starVelocity || 0)).slice(0, 6);
+      return [...withStars].sort((a, b) => (b.githubStars || 0) - (a.githubStars || 0)).slice(0, 6);
     }
-    return [...enriched].filter(p => p.founded).sort((a, b) => (parseInt(b.founded) || 0) - (parseInt(a.founded) || 0)).slice(0, 6);
+    return [...enriched].filter(p => p.fundingTotal > 0).sort((a, b) => (b.fundingTotal || 0) - (a.fundingTotal || 0)).slice(0, 6);
   }, [enriched]);
 
   const hasPipelineData = Object.keys(pipelineData).length > 0;
@@ -364,15 +385,24 @@ export default function AgentScreener() {
   // Newly added products (last 30 days)
   const newlyAdded = useMemo(() => getNewlyAddedProducts(enriched, 30), [enriched]);
 
-  const agg = useMemo(() => ({
-    n: enriched.length,
-    gh: enriched.filter(p => p.github).length,
-    cats: ALL_CATS.length - 1,
-    tokens: enriched.filter(p => p.token).length,
-    withSite: enriched.filter(p => p.website).length,
-    totalStars: enriched.reduce((s, p) => s + (p.githubStars || 0), 0),
-    funded: enriched.filter(p => p.fundingTotal > 0).length,
-  }), [enriched]);
+  const agg = useMemo(() => {
+    const funded = enriched.filter(p => p.fundingTotal > 0);
+    const withRev = enriched.filter(p => p.mrr > 0);
+    const totalFunding = funded.reduce((s, p) => s + (p.fundingTotal || 0), 0);
+    const totalARR = withRev.reduce((s, p) => s + (p.mrr || 0) * 12, 0);
+    const totalStars = enriched.reduce((s, p) => s + (p.githubStars || 0), 0);
+    return {
+      n: enriched.length,
+      gh: enriched.filter(p => p.github).length,
+      cats: ALL_CATS.length - 1,
+      totalStars,
+      funded: funded.length,
+      totalFunding,
+      withRev: withRev.length,
+      totalARR,
+      newMonth: newlyAdded.length,
+    };
+  }, [enriched, newlyAdded]);
 
   return (
     <div id="app" style={{ "--bg": "#0A0B10", "--s1": "#12141C", "--s2": "rgba(255,255,255,.03)", "--sh": "rgba(255,255,255,.05)", "--b1": "rgba(255,255,255,.08)", "--b2": "rgba(255,255,255,.12)", "--t1": "#F2F2F7", "--t2": "rgba(242,242,247,.65)", "--t3": "rgba(242,242,247,.38)", "--t4": "rgba(242,242,247,.15)", "--g": "#2DD4BF", "--gg": "rgba(45,212,191,.1)", "--gd": "rgba(45,212,191,.04)", "--r": "#EF4444", "--y": "#F59E0B", "--up": "#2DD4BF", "--dn": "#EF4444", "--m": "'SF Mono', 'JetBrains Mono', 'Fira Code', monospace", "--f": "-apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif", minHeight: "100vh", background: "var(--bg)", color: "var(--t1)", fontFamily: "var(--f)" }}>
@@ -408,9 +438,9 @@ export default function AgentScreener() {
         .modal-bg { position: fixed; inset: 0; background: rgba(0,0,0,.6); backdrop-filter: blur(20px); display: flex; align-items: center; justify-content: center; z-index: 1000; animation: fi .15s ease; }
         .cat-btn { padding: 5px 11px; border-radius: 5px; border: 1px solid var(--b1); background: transparent; color: var(--t3); font-size: 11px; font-weight: 600; cursor: pointer; font-family: var(--f); transition: all .1s; }
         .cat-btn.on { border-color: rgba(255,255,255,.12); background: var(--gd); color: var(--g); }
-        .row { display: grid; grid-template-columns: 32px 2fr .85fr .85fr .75fr .7fr .55fr 90px 28px; padding: 11px 14px; border-radius: 7px; cursor: pointer; align-items: center; transition: all .1s; border: 1px solid transparent; }
+        .row { display: grid; grid-template-columns: 32px 2fr .9fr .65fr .85fr .75fr .5fr 80px 28px; padding: 11px 14px; border-radius: 7px; cursor: pointer; align-items: center; transition: all .1s; border: 1px solid transparent; }
         .row:hover { background: var(--sh); border-color: var(--b2); }
-        .row-h { display: grid; grid-template-columns: 32px 2fr .85fr .85fr .75fr .7fr .55fr 90px 28px; padding: 7px 14px; }
+        .row-h { display: grid; grid-template-columns: 32px 2fr .9fr .65fr .85fr .75fr .5fr 80px 28px; padding: 7px 14px; }
         .vb { font-weight: 600; letter-spacing: .04em; text-transform: uppercase; display: inline-flex; align-items: center; white-space: nowrap; }
         .mover { flex: 0 0 auto; min-width: 185px; padding: 13px 16px; border-radius: 10px; background: var(--s1); border: 1px solid var(--b1); cursor: pointer; transition: all .12s; }
         .mover:hover { background: var(--sh); border-color: var(--b2); }
@@ -472,10 +502,17 @@ export default function AgentScreener() {
 
       {/* STATS BAR */}
       <div className="dash-stats-bar" style={{ padding: "10px 24px", display: "flex", gap: 24, borderBottom: "1px solid var(--b1)", background: "rgba(255,255,255,.01)" }}>
-        {[["Products", agg.n], ["Categories", agg.cats], ["Open Source", agg.gh], ["New This Month", newlyAdded.length], ...(hasPipelineData ? [["Total Stars", fmtU(agg.totalStars)]] : [["Crypto-AI", agg.tokens]])].map(([l, v], i) => (
+        {[
+          ["Products", agg.n, null],
+          ["Funding Tracked", agg.totalFunding > 0 ? fmt$(agg.totalFunding) : "—", "var(--g)"],
+          ["ARR Tracked", agg.totalARR > 0 ? fmt$(agg.totalARR) : "—", "var(--g)"],
+          ["GitHub Stars", fmtU(agg.totalStars), null],
+          ["Open Source", agg.gh, null],
+          ["New This Month", agg.newMonth, agg.newMonth > 0 ? "var(--g)" : null],
+        ].map(([l, v, c], i) => (
           <div key={i} style={{ display: "flex", alignItems: "center", gap: 6 }}>
             <span style={{ fontSize: 9, fontWeight: 600, letterSpacing: ".08em", textTransform: "uppercase", color: "var(--t3)" }}>{l}</span>
-            <span style={{ fontSize: 12, fontWeight: 700, fontFamily: "var(--m)", color: "var(--t1)" }}>{v}</span>
+            <span style={{ fontSize: 12, fontWeight: 700, fontFamily: "var(--m)", color: c || "var(--t1)" }}>{v}</span>
           </div>
         ))}
       </div>
@@ -484,7 +521,7 @@ export default function AgentScreener() {
 
         {/* TOP MOVERS */}
         <div style={{ marginBottom: 20 }}>
-          <span className="label-xs" style={{ marginBottom: 8, display: "block" }}>{hasPipelineData ? "Trending (Star Velocity)" : "Newest Products"}</span>
+          <span className="label-xs" style={{ marginBottom: 8, display: "block" }}>{hasPipelineData ? "Trending" : "Top Products"}</span>
           <div style={{ display: "flex", gap: 8, overflowX: "auto", paddingBottom: 2 }}>
             {movers.map((p, i) => (
               <div key={p.id} className="mover" onClick={() => setSel(p)} style={{ animation: `su .25s ease ${i * .04}s both` }}>
@@ -493,14 +530,21 @@ export default function AgentScreener() {
                     <ProductLogo product={p} size={24} />
                     <div>
                       <div style={{ fontSize: 12, fontWeight: 700 }}>{p.name}</div>
-                      {p.ticker ? <div style={{ fontSize: 9, color: "var(--y)", fontFamily: "var(--m)", fontWeight: 700 }}>${p.ticker}</div> : <div style={{ fontSize: 9, color: "var(--t4)" }}>{p.category}</div>}
+                      <div style={{ fontSize: 9, color: "var(--t4)" }}>{p.category}</div>
                     </div>
                   </div>
-                  <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: "var(--g)" }}>{p.githubStars ? fmtU(p.githubStars) + " ★" : p.founded || "—"}</span>
+                  {p.githubStars ? (
+                    <div style={{ textAlign: "right" }}>
+                      <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: "var(--g)" }}>{fmtU(p.githubStars)} ★</span>
+                      {p.starVelocity > 0 && <div style={{ fontSize: 8, color: "var(--up)", fontFamily: "var(--m)" }}>+{p.starVelocity}/wk</div>}
+                    </div>
+                  ) : (
+                    <span style={{ fontSize: 11, fontWeight: 700, fontFamily: "var(--m)", color: "var(--t3)" }}>{p.founded || "—"}</span>
+                  )}
                 </div>
-                <Spark data={p.spark} up={(p.mrrChange || 0) >= 0} w={155} h={24} />
+                {p.commitActivity ? <MiniCommitSpark weeks={p.commitActivity} w={155} h={24} /> : <Spark data={p.spark} up={(p.mrrChange || 0) >= 0} w={155} h={24} />}
                 <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 9, color: "var(--t3)" }}>
-                  <span>{p.mrr ? <><ConfidenceDot level={p.revenueConfidence} />{fmt$(p.mrr)} /mo</> : "—"}</span>
+                  <span>{p.fundingTotal ? fmt$(p.fundingTotal) + (p.lastRound ? ` · ${p.lastRound}` : "") : p.mrr ? fmt$(p.mrr) + " /mo" : "—"}</span>
                   <span>{p.mau ? fmtU(p.mau) + " MAU" : "—"}</span>
                 </div>
               </div>
@@ -530,10 +574,10 @@ export default function AgentScreener() {
                       </div>
                     </div>
                   </div>
-                  <Spark data={p.spark} up={true} w={155} h={24} />
+                  {p.commitActivity ? <MiniCommitSpark weeks={p.commitActivity} w={155} h={24} /> : <Spark data={p.spark} up={true} w={155} h={24} />}
                   <div style={{ display: "flex", justifyContent: "space-between", marginTop: 6, fontSize: 9, color: "var(--t3)" }}>
                     <span>{p.added ? new Date(p.added).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : "—"}</span>
-                    <span>{p.mrr ? fmt$(p.mrr) + " /mo" : p.fundingTotal ? fmt$(p.fundingTotal) : "—"}</span>
+                    <span>{p.fundingTotal ? fmt$(p.fundingTotal) : p.githubStars ? fmtU(p.githubStars) + " ★" : "—"}</span>
                   </div>
                 </div>
               ))}
@@ -563,7 +607,7 @@ export default function AgentScreener() {
         {/* TABLE */}
         {view === "table" && <div className="dash-table-wrap">
           <div className="row-h" style={{ fontSize: 9, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", color: "var(--t3)" }}>
-            <span>#</span><span>Product</span><span style={{ textAlign: "right" }}>Revenue /mo</span><span style={{ textAlign: "right" }}>MAU</span><span style={{ textAlign: "right" }}>GitHub</span><span style={{ textAlign: "right" }}>Links</span><span style={{ textAlign: "center" }}>Sources</span><span style={{ textAlign: "right" }}>30d</span><span></span>
+            <span>#</span><span>Product</span><span style={{ textAlign: "right" }}>Funding</span><span style={{ textAlign: "right" }}>Revenue</span><span style={{ textAlign: "right" }}>GitHub</span><span style={{ textAlign: "right" }}>MAU</span><span style={{ textAlign: "right" }}>Links</span><span style={{ textAlign: "right" }}>Activity</span><span></span>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
             {filtered.map((p, i) => (
@@ -581,28 +625,38 @@ export default function AgentScreener() {
                     <span style={{ fontSize: 9, color: "var(--t4)" }}>{p.category}</span>
                   </div>
                 </div>
+                {/* Funding */}
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, fontFamily: "var(--m)", color: p.fundingTotal ? "var(--t1)" : "var(--t3)" }}>{p.fundingTotal ? fmt$(p.fundingTotal) : "—"}</div>
+                  {p.lastRound && <div style={{ fontSize: 8, fontWeight: 600, fontFamily: "var(--m)", color: "var(--t3)", marginTop: 1 }}>{p.lastRound}</div>}
+                </div>
+                {/* Revenue */}
                 <div style={{ textAlign: "right" }}>
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 3 }}>
                     {p.revenueConfidence && <ConfidenceDot level={p.revenueConfidence} />}
                     <span style={{ fontSize: 12, fontWeight: 700, fontFamily: "var(--m)", color: p.mrr ? "var(--t1)" : "var(--t3)" }}>{fmt$(p.mrr)}</span>
                   </div>
-                  <div style={{ fontSize: 9, color: p.revenueConfidence === "high" ? "var(--up)" : p.revenueConfidence === "medium" ? "var(--y)" : "var(--t4)" }}>{p.revenueSourceNames || ""}</div>
+                  {p.revenueSourceNames && <div style={{ fontSize: 8, color: p.revenueConfidence === "high" ? "var(--up)" : p.revenueConfidence === "medium" ? "var(--y)" : "var(--t4)", marginTop: 1 }}>{p.revenueSourceNames}</div>}
                 </div>
+                {/* GitHub */}
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, fontFamily: "var(--m)", color: p.githubStars ? "var(--t1)" : "var(--t3)" }}>{p.githubStars ? fmtU(p.githubStars) + " ★" : p.github ? "—" : "—"}</div>
+                  <div style={{ fontSize: 9, color: p.starVelocity ? "var(--up)" : "var(--t4)" }}>{p.starVelocity ? `+${p.starVelocity}/wk` : p.github ? `${p.github.o}/${p.github.r}`.slice(0, 18) : ""}</div>
+                </div>
+                {/* MAU */}
                 <div style={{ textAlign: "right" }}>
                   <div style={{ fontSize: 12, fontWeight: 700, fontFamily: "var(--m)", color: p.mau ? "var(--t1)" : "var(--t3)" }}>{fmtU(p.mau)}</div>
-                  <div style={{ fontSize: 9, color: p.mau ? "var(--up)" : "var(--t4)" }}>{p.mau ? (SRC[p.verifications.usage] || "est.") : ""}</div>
                 </div>
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, fontFamily: "var(--m)" }}>{p.githubStars ? fmtU(p.githubStars) + " ★" : p.github ? "✓" : "—"}</div>
-                  <div style={{ fontSize: 9, color: p.github ? "var(--up)" : "var(--t4)" }}>{p.starVelocity ? `+${p.starVelocity}/wk` : p.github ? `${p.github.o}/${p.github.r}`.slice(0, 18) : "closed"}</div>
+                {/* Links */}
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 3 }}>
+                  {p.website && <a href={p.website} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 10, color: "var(--g)", textDecoration: "none", padding: "2px 4px", borderRadius: 3, background: "var(--gd)" }}>↗</a>}
+                  {p.twitter && <a href={p.twitter} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 10, color: "var(--t2)", textDecoration: "none", padding: "2px 4px", borderRadius: 3, background: "var(--s2)" }}>𝕏</a>}
+                  {p.token && <span style={{ fontSize: 8, padding: "2px 4px", borderRadius: 3, background: "rgba(217,119,6,.06)", color: "var(--y)", fontWeight: 700 }}>${p.token.symbol}</span>}
                 </div>
-                <div style={{ display: "flex", justifyContent: "flex-end", gap: 4 }}>
-                  {p.website && <a href={p.website} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 10, color: "var(--g)", textDecoration: "none", padding: "2px 5px", borderRadius: 3, background: "var(--gd)" }}>↗</a>}
-                  {p.twitter && <a href={p.twitter} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()} style={{ fontSize: 10, color: "var(--t2)", textDecoration: "none", padding: "2px 5px", borderRadius: 3, background: "var(--s2)" }}>𝕏</a>}
-                  {p.token && <span style={{ fontSize: 8, padding: "2px 5px", borderRadius: 3, background: "rgba(217,119,6,.06)", color: "var(--y)", fontWeight: 700 }}>${p.token.symbol}</span>}
+                {/* Activity sparkline — use real commit data if available */}
+                <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                  {p.commitActivity ? <MiniCommitSpark weeks={p.commitActivity} w={74} h={22} /> : <Spark data={p.spark} up={true} w={74} h={22} />}
                 </div>
-                <div style={{ display: "flex", justifyContent: "center" }}><VMeter v={p.verifications} /></div>
-                <div style={{ display: "flex", justifyContent: "flex-end" }}><Spark data={p.spark} up={true} w={90} h={24} /></div>
                 <button className="wl-star" onClick={e => toggleWl(e, p.id)} style={{ color: wl.has(p.id) ? "var(--y)" : "var(--t3)", filter: wl.has(p.id) ? "drop-shadow(0 0 3px rgba(217,119,6,.3))" : "none" }}>{wl.has(p.id) ? "★" : "☆"}</button>
               </div>
             ))}
